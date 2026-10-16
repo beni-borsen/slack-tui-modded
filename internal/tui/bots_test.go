@@ -57,3 +57,36 @@ func TestWrappedLinkStaysInItsRow(t *testing.T) {
 		}
 	}
 }
+
+func TestExternalUserLookup(t *testing.T) {
+	m := chanWithMessages(t)
+	m.focus = fMessages
+	m.convs["D9"] = &backend.Conversation{ID: "D9", Kind: backend.KindDM, UserID: "U9X", Latest: "50.0"}
+	m.rebuildSidebar()
+	m.Update(historyMsg{id: "C2", msgs: []backend.Message{
+		{TS: "100.000003", User: "U8X", Text: "hi <@U7X>"},
+	}})
+	for _, id := range []string{"U9X", "U8X", "U7X"} {
+		if !m.userLookups[id] {
+			t.Errorf("%s was not looked up", id)
+		}
+	}
+	if m.userLookups["U1"] {
+		t.Error("a known user was looked up")
+	}
+	m.Update(userInfoMsg{user: backend.User{ID: "U8X", Name: "ext.person", RealName: "Ext Person"}})
+	m.Update(userInfoMsg{user: backend.User{ID: "U7X", DisplayName: "Partner"}})
+	m.Update(userInfoMsg{user: backend.User{ID: "U9X", RealName: "Dee Em"}})
+	v := dump(t, m)
+	for _, want := range []string{"Ext Person", "hi @Partner"} {
+		if !strings.Contains(v, want) {
+			t.Errorf("screen is missing %q", want)
+		}
+	}
+	if strings.Contains(v, "U8X") || strings.Contains(v, "U7X") {
+		t.Error("an ID is still shown")
+	}
+	if m.convLabel(m.convs["D9"]) != "Dee Em" {
+		t.Errorf("DM label = %q", m.convLabel(m.convs["D9"]))
+	}
+}

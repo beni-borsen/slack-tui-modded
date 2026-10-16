@@ -38,7 +38,7 @@ type section struct {
 }
 
 // sections groups every conversation: custom sections from the config
-// first, then Channels and Direct messages.
+// first, then Channels, Direct messages and External (Slack Connect).
 func (m *Model) sections() []section {
 	var out []section
 	used := map[string]bool{}
@@ -55,7 +55,7 @@ func (m *Model) sections() []section {
 		}
 	}
 
-	var chans, dms []*backend.Conversation
+	var chans, dms, ext []*backend.Conversation
 	for id, c := range m.convs {
 		if used[id] {
 			continue
@@ -67,22 +67,29 @@ func (m *Model) sections() []section {
 			if c.InfoLoaded && c.Latest == "" { // never had a message
 				continue
 			}
+		}
+		switch {
+		case m.isExternal(c):
+			ext = append(ext, c)
+		case c.IsDM():
 			dms = append(dms, c)
-		} else {
+		default:
 			chans = append(chans, c)
 		}
 	}
 	slices.SortFunc(chans, func(a, b *backend.Conversation) int { return strings.Compare(a.Name, b.Name) })
-	// DMs by recent activity, like Slack.
-	slices.SortFunc(dms, func(a, b *backend.Conversation) int {
-		if a.Latest != b.Latest {
-			if backend.TSLess(a.Latest, b.Latest) {
+	// DMs by recent activity, like Slack: one-to-one first, then groups.
+	byGroupThenRecent := func(a, b *backend.Conversation) int {
+		if ag, bg := a.Kind == backend.KindGroup, b.Kind == backend.KindGroup; ag != bg {
+			if ag {
 				return 1
 			}
 			return -1
 		}
-		return strings.Compare(m.convLabel(a), m.convLabel(b))
-	})
+		return m.byRecent(a, b)
+	}
+	slices.SortFunc(dms, byGroupThenRecent)
+	slices.SortFunc(ext, m.byRecent)
 	ids := func(cs []*backend.Conversation) []string {
 		out := make([]string, len(cs))
 		for i, c := range cs {
@@ -96,7 +103,33 @@ func (m *Model) sections() []section {
 	if len(dms) > 0 {
 		out = append(out, section{"Direct messages", ids(dms)})
 	}
+	if len(ext) > 0 {
+		out = append(out, section{"External", ids(ext)})
+	}
 	return out
+}
+
+// byRecent orders conversations newest activity first.
+func (m *Model) byRecent(a, b *backend.Conversation) int {
+	if a.Latest != b.Latest {
+		if backend.TSLess(a.Latest, b.Latest) {
+			return 1
+		}
+		return -1
+	}
+	return strings.Compare(m.convLabel(a), m.convLabel(b))
+}
+
+// isExternal is true for Slack Connect: conversations shared with another
+// organisation, and DMs with someone from one.
+func (m *Model) isExternal(c *backend.Conversation) bool {
+	if c.External {
+		return true
+	}
+	if c.Kind != backend.KindDM {
+		return false
+	}
+	return m.extUsers[c.UserID]
 }
 
 func (m *Model) rebuildSidebar() {

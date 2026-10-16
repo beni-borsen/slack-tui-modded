@@ -44,7 +44,9 @@ image_max_cols = 40       # thumbnail size limit, in cells
 image_max_rows = 12
 image_viewer = "loupe"    # opens images with `o` (default: loupe if installed); other files use xdg-open
 
-# Custom sidebar sections. Slack's own sections are not in the public API.
+# Custom sidebar sections, above the built-in Channels, Direct messages (one-to-one first,
+# then groups, each by recent activity) and External (Slack Connect channels and people).
+# Slack's own sections are not in the public API.
 [[section]]
 name = "Team"
 icon = ":partyparrot:"   # optional emoji before the name; custom workspace emoji work too

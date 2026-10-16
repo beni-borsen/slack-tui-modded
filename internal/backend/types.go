@@ -32,6 +32,8 @@ type Conversation struct {
 	Mentions int
 	// InfoLoaded is set once LastRead/Latest came from conversations.info.
 	InfoLoaded bool
+	// External is a Slack Connect conversation, shared with another organisation.
+	External bool
 }
 
 // Unread reports whether there are messages newer than the read marker.
@@ -49,6 +51,7 @@ type User struct {
 	Deleted     bool
 	IsBot       bool
 	TZ          string
+	TeamID      string // the person's home workspace
 }
 
 // Label is the name Slack shows for the user.
