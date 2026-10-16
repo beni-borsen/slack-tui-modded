@@ -138,6 +138,8 @@ func (m *Model) sectionIcon(section string) string {
 		return sHeader.Render("\uf4df")
 	case "Direct messages":
 		return sHeader.Render("\uf442")
+	case "External":
+		return sHeader.Render("\uf42b")
 	}
 	return ""
 }

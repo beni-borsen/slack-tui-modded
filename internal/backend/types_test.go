@@ -1,6 +1,10 @@
 package backend
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/slack-go/slack"
+)
 
 func TestTSLess(t *testing.T) {
 	for _, tc := range []struct {
@@ -31,5 +35,16 @@ func TestUnreadAndReply(t *testing.T) {
 	if !(Message{TS: "2", ThreadTS: "1"}).IsReply() || (Message{TS: "1", ThreadTS: "1"}).IsReply() ||
 		(Message{TS: "2", ThreadTS: "1", SubType: "thread_broadcast"}).IsReply() {
 		t.Error("IsReply wrong")
+	}
+}
+
+func TestBotNameOverride(t *testing.T) {
+	m := fromMsg(slack.Msg{BotID: "B1", Username: "Deploy v2", BotProfile: &slack.BotProfile{Name: "deploy-bot"}})
+	if m.BotName != "Deploy v2" {
+		t.Errorf("BotName = %q, want the per-message name", m.BotName)
+	}
+	m = fromMsg(slack.Msg{BotID: "B1", BotProfile: &slack.BotProfile{Name: "deploy-bot"}})
+	if m.BotName != "deploy-bot" {
+		t.Errorf("BotName = %q, want the profile name", m.BotName)
 	}
 }

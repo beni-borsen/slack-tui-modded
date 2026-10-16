@@ -67,10 +67,7 @@ func (c *Client) Users(ctx context.Context) ([]User, error) {
 	}
 	out := make([]User, 0, len(us))
 	for _, u := range us {
-		out = append(out, User{
-			ID: u.ID, Name: u.Name, DisplayName: u.Profile.DisplayName, RealName: u.RealName,
-			Deleted: u.Deleted, IsBot: u.IsBot, TZ: u.TZ,
-		})
+		out = append(out, fromUser(u))
 	}
 	return out, nil
 }
@@ -105,7 +102,7 @@ func (c *Client) Conversations(ctx context.Context) ([]Conversation, error) {
 }
 
 func fromChannel(ch slack.Channel) Conversation {
-	c := Conversation{ID: ch.ID, Name: ch.Name, Topic: ch.Topic.Value, LastRead: ch.LastRead}
+	c := Conversation{ID: ch.ID, Name: ch.Name, Topic: ch.Topic.Value, LastRead: ch.LastRead, External: ch.IsExtShared}
 	switch {
 	case ch.IsIM:
 		c.Kind, c.UserID, c.Name = KindDM, ch.User, ch.User
@@ -314,4 +311,42 @@ func (c *Client) OpenDM(ctx context.Context, userID string) (string, error) {
 		return "", fmt.Errorf("conversations.open: %w", err)
 	}
 	return ch.ID, nil
+}
+
+// BotName looks up a bot's name, for messages that carry only its ID.
+func (c *Client) BotName(ctx context.Context, id string) (string, error) {
+	var b *slack.Bot
+	err := retry(ctx, func() (err error) {
+		b, err = c.api.GetBotInfoContext(ctx, slack.GetBotInfoParameters{Bot: id})
+		return err
+	})
+	if err != nil {
+		return "", fmt.Errorf("bots.info: %w", err)
+	}
+	return b.Name, nil
+}
+
+// UserInfo looks up one person, for those users.list leaves out: people
+// from other organisations in shared (Slack Connect) channels.
+func (c *Client) UserInfo(ctx context.Context, id string) (User, error) {
+	var u *slack.User
+	err := retry(ctx, func() (err error) {
+		u, err = c.api.GetUserInfoContext(ctx, id)
+		return err
+	})
+	if err != nil {
+		return User{}, fmt.Errorf("users.info: %w", err)
+	}
+	return fromUser(*u), nil
+}
+
+func fromUser(u slack.User) User {
+	real := u.RealName
+	if real == "" {
+		real = u.Profile.RealName // external people often only have it here
+	}
+	return User{
+		ID: u.ID, Name: u.Name, DisplayName: u.Profile.DisplayName, RealName: real,
+		Deleted: u.Deleted, IsBot: u.IsBot, TZ: u.TZ, TeamID: u.TeamID,
+	}
 }

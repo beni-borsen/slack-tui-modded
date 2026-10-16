@@ -87,9 +87,13 @@ type Model struct {
 	focus   focus
 	insert  bool
 	input   textarea.Model
-	viewer  *viewer       // full-window image viewer, when open
-	opener  *opener       // what `o` opens, when a message has several
-	attach  []*attachment // clipboard images going out with the next send
+	viewer  *viewer           // full-window image viewer, when open
+	bots    map[string]string // bot ID → name, looked up with bots.info ("" while pending)
+	// userLookups: people not in users.list already asked for with users.info.
+	userLookups map[string]bool
+	extUsers    map[string]bool // people from other organisations
+	opener      *opener         // what `o` opens, when a message has several
+	attach      []*attachment   // clipboard images going out with the next send
 
 	switcher *switcher
 	help     bool
@@ -149,6 +153,7 @@ func New(ctx context.Context, client *backend.Client, cfg config.Config) *Model 
 		events:        make(chan any, 256),
 		users:         map[string]backend.User{},
 		convs:         map[string]*backend.Conversation{},
+		extUsers:      map[string]bool{},
 		lists:         map[string]*msgList{},
 		unreadMsgs:    map[string][]backend.Message{},
 		fetchingUR:    map[string]bool{},
@@ -591,6 +596,12 @@ func (m *Model) senderName(msg backend.Message) string {
 	}
 	if msg.BotName != "" {
 		return msg.BotName
+	}
+	if n := m.bots[msg.BotID]; n != "" {
+		return n
+	}
+	if msg.BotID != "" {
+		return "bot"
 	}
 	if msg.User != "" {
 		return msg.User

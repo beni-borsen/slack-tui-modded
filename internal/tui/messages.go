@@ -64,7 +64,7 @@ func (m *Model) renderList(l *msgList, width, height int, active, inThread bool)
 			pre = append(pre, sNewLine.Render(strings.Repeat("─", max(0, width-6))+" new"))
 		}
 		grouped := prev != nil && len(pre) == 0 && !(inThread && i == 1) &&
-			prev.User == msg.User && prev.BotName == msg.BotName &&
+			prev.User == msg.User && prev.BotName == msg.BotName && prev.BotID == msg.BotID &&
 			!systemSubtypes[prev.SubType] && !systemSubtypes[msg.SubType] &&
 			msg.Time().Sub(prev.Time()) < 5*time.Minute
 		body := m.messageLines(*msg, width-2, !grouped, inThread)
@@ -123,8 +123,8 @@ func (m *Model) messageLines(msg backend.Message, width int, header, inThread bo
 		return wrap(sSystem.Render("→ ")+text+"  "+t, width)
 	}
 	if header {
-		name := nameStyle(msg.User + msg.BotName).Render(m.senderName(msg))
-		if msg.User == "" && msg.BotName != "" {
+		name := nameStyle(msg.User + msg.BotName + msg.BotID).Render(m.senderName(msg))
+		if msg.User == "" && (msg.BotName != "" || msg.BotID != "") {
 			name += " " + sFaint.Render("APP")
 		}
 		lines = append(lines, name+"  "+sTime.Render(msg.Time().Format(m.cfg.TimeFormat)))
@@ -173,22 +173,38 @@ func wrap(s string, width int) []string {
 	return linksPerLine(strings.Split(ansi.Wrap(s, width, ""), "\n"))
 }
 
-var reOSC8 = regexp.MustCompile("\x1b]8;[^;\x1b]*;([^\x1b]*)\x1b\\\\")
+var reEsc = regexp.MustCompile("\x1b\\[[0-9;:]*m|\x1b]8;[^;\x1b]*;([^\x1b]*)\x1b\\\\")
 
-// linksPerLine closes a hyperlink at the end of each line it runs over and
-// reopens it on the next. Wrapping alone leaves it open across the newline,
-// and the terminal would then link whatever is drawn next on that row too,
-// like the neighbouring pane.
+// linksPerLine makes every wrapped line self-contained: colours, underline
+// and hyperlinks still open at the end of a line are closed there and
+// reopened on the next. Wrapping alone leaves them open across the newline,
+// and the terminal then underlines (or links) the rest of that row and
+// whatever is drawn next to it, like the neighbouring pane.
 func linksPerLine(lines []string) []string {
-	open := ""
+	carry := ""
 	for i, l := range lines {
-		l = open + l
-		open = ""
-		if ms := reOSC8.FindAllStringSubmatch(l, -1); len(ms) > 0 {
-			if last := ms[len(ms)-1]; last[1] != "" {
-				open = last[0]
-				l += "\x1b]8;;\x1b\\"
+		l = carry + l
+		var sgr []string
+		link := ""
+		for _, m := range reEsc.FindAllStringSubmatch(l, -1) {
+			switch seq := m[0]; {
+			case strings.HasPrefix(seq, "\x1b]8;"):
+				link = ""
+				if m[1] != "" {
+					link = seq
+				}
+			case seq == "\x1b[m" || seq == "\x1b[0m":
+				sgr = sgr[:0]
+			default:
+				sgr = append(sgr, seq)
 			}
+		}
+		carry = strings.Join(sgr, "") + link
+		if len(sgr) > 0 {
+			l += "\x1b[0m"
+		}
+		if link != "" {
+			l += "\x1b]8;;\x1b\\"
 		}
 		lines[i] = l
 	}

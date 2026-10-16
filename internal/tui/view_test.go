@@ -207,3 +207,46 @@ func TestLinksPerLine(t *testing.T) {
 		t.Errorf("continued line should reopen the link: %q", got[1])
 	}
 }
+
+func sectionOf(m *Model, id string) string {
+	cur := ""
+	for _, it := range m.side {
+		if it.header != "" {
+			cur = it.header
+		}
+		if it.id == id {
+			return cur
+		}
+	}
+	return ""
+}
+
+func TestDMOrderAndExternal(t *testing.T) {
+	m := fakeModel(t, 110, 40)
+	m.client.TeamID = "T1"
+	m.cfg.Sections = nil
+	m.convs["G1"].Latest = "900.0" // a group newer than every DM still comes after them
+	m.convs["D2"].Latest = "150.0"
+	m.convs["X1"] = &backend.Conversation{ID: "X1", Name: "partner-shared", Kind: backend.KindChannel, External: true, Latest: "10.0"}
+	m.convs["D9"] = &backend.Conversation{ID: "D9", Kind: backend.KindDM, UserID: "U9X", Latest: "500.0"}
+	m.rebuildSidebar()
+	m.Update(userInfoMsg{user: backend.User{ID: "U9X", RealName: "Ext Person", TeamID: "T2"}})
+
+	var dms []string
+	for _, it := range m.side {
+		if it.id != "" && sectionOf(m, it.id) == "Direct messages" {
+			dms = append(dms, it.id)
+		}
+	}
+	if strings.Join(dms, ",") != "D1,D2,G1" {
+		t.Errorf("DM order = %v, want singles by recency (D1 200, D2 150) then groups", dms)
+	}
+	for id, want := range map[string]string{"X1": "External", "D9": "External", "C2": "Channels"} {
+		if got := sectionOf(m, id); got != want {
+			t.Errorf("%s is in %q, want %q", id, got, want)
+		}
+	}
+	if v := dump(t, m); !strings.Contains(v, " EXTERNAL") {
+		t.Error("External header missing")
+	}
+}
