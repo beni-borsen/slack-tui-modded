@@ -29,6 +29,14 @@ const (
 // unreadsID is the sidebar entry for the Unreads view.
 const unreadsID = "\x00unreads"
 
+// Nerd Font glyphs for the Unreads entry and for people (DMs).
+const (
+	unreadsIcon = "\U000f0117"
+	userIcon    = "\uf007"
+	groupIcon   = "\uedca"
+	lockIcon    = "\uf456" // private channels
+)
+
 const pageSize = 50
 
 // msgList is one scrollable list of messages: a conversation or a thread.

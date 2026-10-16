@@ -6,6 +6,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/magnusdalkvist/slack-tui/internal/backend"
 )
 
 // switcher is the Ctrl-K fuzzy conversation finder.
@@ -96,12 +98,17 @@ func (m *Model) renderSwitcher(width, height int) string {
 	start := max(0, s.sel-listH+1)
 	for i := start; i < len(s.matches) && i < start+listH; i++ {
 		id := s.matches[i]
-		label := "◆ Unreads"
+		label := unreadsIcon + " Unreads"
 		unread := false
 		if c := m.convs[id]; c != nil {
 			icon := "#"
-			if c.IsDM() {
-				icon = "•"
+			switch c.Kind {
+			case backend.KindDM:
+				icon = userIcon
+			case backend.KindGroup:
+				icon = groupIcon
+			case backend.KindPrivate:
+				icon = lockIcon
 			}
 			label = icon + " " + m.convLabel(c)
 			unread = c.Unread()

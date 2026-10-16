@@ -237,7 +237,7 @@ func (m *Model) sideRow(it sideItem, cursor bool, width int) string {
 	unread, badge := false, 0
 	if it.id == unreadsID {
 		n := m.unreadCount()
-		icon, label, unread = "◆", "Unreads", n > 0
+		icon, label, unread = unreadsIcon, "Unreads", n > 0
 		if n > 0 {
 			label = fmt.Sprintf("Unreads (%d)", n)
 		}
@@ -250,11 +250,11 @@ func (m *Model) sideRow(it sideItem, cursor bool, width int) string {
 		case backend.KindChannel:
 			icon = "#"
 		case backend.KindPrivate:
-			icon = "⊘"
+			icon = lockIcon
 		case backend.KindDM:
-			icon = "•"
+			icon = userIcon
 		case backend.KindGroup:
-			icon = "◦"
+			icon = groupIcon
 		}
 		label = m.convLabel(c)
 		unread, badge = c.Unread(), c.Mentions

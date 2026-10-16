@@ -189,4 +189,7 @@ func TestBuiltinSectionIcons(t *testing.T) {
 	if !strings.Contains(v, "▾  CHANNELS") || !strings.Contains(v, "▾  DIRECT MESSAGES") {
 		t.Error("built-in section icons missing")
 	}
+	if !strings.Contains(v, unreadsIcon+" Unreads") {
+		t.Error("unreads icon missing")
+	}
 }
