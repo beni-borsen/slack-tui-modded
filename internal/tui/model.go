@@ -88,6 +88,7 @@ type Model struct {
 	insert  bool
 	input   textarea.Model
 	viewer  *viewer       // full-window image viewer, when open
+	opener  *opener       // what `o` opens, when a message has several
 	attach  []*attachment // clipboard images going out with the next send
 
 	switcher *switcher

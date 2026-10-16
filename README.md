@@ -65,6 +65,7 @@ items = ["#news"]
 | `enter` | open conversation, or open the selected message's thread |
 | `i` / `a` | write in the focused pane (channel or thread) |
 | `enter` / `alt+enter`, `ctrl+j` | send / new line (insert mode) |
+| `ctrl+b` / `alt+i` (insert mode) | bold / italic the word at the cursor (again to undo; with no word, starts a `**` pair). `[label](https://…)` is sent as a link |
 | paste an image, `ctrl+v` | attach the clipboard image (repeat for up to 10 in one message); `enter` uploads it with the typed text, `ctrl+x` drops it (insert mode) |
 | `:ta` `@an` `#de` (insert mode) | complete emoji, people (also @here/@channel/@everyone) and channels: `tab`/`enter` inserts, `↑` `↓` choose, `esc` closes. People and channels are sent as real mentions |
 | `esc` | back to normal mode |
@@ -74,7 +75,7 @@ items = ["#news"]
 | `+` | react: emoji picker (enter adds, or removes a reaction you already have) |
 | `e` / `↑` in an empty input | edit your message / your last message (enter saves, esc cancels) |
 | `D` | delete your message (asks y/n) |
-| `o` | open the selected message's file (images in `image_viewer`) |
+| `o` | open the selected message's file (images in `image_viewer`) or link (browser); with several, a chooser: `1`-`9` or `enter` opens |
 | `v` | full-window image viewer from the selected message: `←` `→` step through every image in the conversation or thread, `o` opens externally, `esc` closes |
 | `x` | close thread |
 | `?` | help |

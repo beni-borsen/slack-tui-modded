@@ -193,3 +193,17 @@ func TestBuiltinSectionIcons(t *testing.T) {
 		t.Error("unreads icon missing")
 	}
 }
+
+func TestLinksPerLine(t *testing.T) {
+	link := "\x1b]8;;https://x.dk\x1b\\"
+	end := "\x1b]8;;\x1b\\"
+	got := wrap("see "+link+"a long label that wraps"+end+" done", 12)
+	for i, l := range got {
+		if strings.Count(l, link) != strings.Count(l, end) {
+			t.Errorf("line %d leaves the link open: %q", i, l)
+		}
+	}
+	if !strings.HasPrefix(got[1], link) {
+		t.Errorf("continued line should reopen the link: %q", got[1])
+	}
+}

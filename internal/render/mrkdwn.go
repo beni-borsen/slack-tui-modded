@@ -227,11 +227,72 @@ func entity(e string, r Resolver, st Styles) string {
 		return st.SelfMention.Render("@" + name)
 	default:
 		url := unescape(target)
+		text := strings.TrimPrefix(strings.TrimPrefix(url, "mailto:"), "tel:")
 		if label != "" && label != url {
-			return st.Link.Render(unescape(label))
+			text = unescape(label)
 		}
-		return st.Link.Render(strings.TrimPrefix(strings.TrimPrefix(url, "mailto:"), "tel:"))
+		return Hyperlink(url, st.Link.Render(text))
 	}
+}
+
+// Hyperlink makes text a terminal hyperlink (OSC 8) to url, so ctrl+click
+// opens the real address even when the text is a label like "github.com/x".
+// Only web and mail links, and never with control characters in them: the
+// URL comes from someone else's message and goes straight to the terminal.
+func Hyperlink(url, text string) string {
+	if !Openable(url) && !strings.HasPrefix(url, "mailto:") {
+		return text
+	}
+	for _, r := range url {
+		if r < 0x20 || r == 0x7f || (r >= 0x80 && r < 0xa0) {
+			return text
+		}
+	}
+	return "\x1b]8;;" + url + "\x1b\\" + text + "\x1b]8;;\x1b\\"
+}
+
+// Openable is true for http(s) URLs, the only kind handed to a browser.
+func Openable(url string) bool {
+	return strings.HasPrefix(url, "https://") || strings.HasPrefix(url, "http://")
+}
+
+// Link is a web link in a message; Label is "" when the text is the URL.
+type Link struct{ URL, Label string }
+
+// Links lists the web links in Slack message text, in order, once each.
+func Links(text string) []Link {
+	var out []Link
+	seen := map[string]bool{}
+	for _, m := range reEntity.FindAllStringSubmatch(text, -1) {
+		target, label, _ := strings.Cut(m[1], "|")
+		u, label := unescape(target), unescape(label)
+		if !Openable(u) || seen[u] {
+			continue
+		}
+		seen[u] = true
+		if label == u || strings.TrimSuffix(label, "/") == strings.TrimSuffix(strings.TrimPrefix(strings.TrimPrefix(u, "https://"), "http://"), "/") {
+			label = ""
+		}
+		out = append(out, Link{URL: u, Label: label})
+	}
+	return out
+}
+
+// PlainLinks turns labelled links (<url|label>) into text that pastes well
+// anywhere: the URL alone when the label only repeats it, else "label (url)".
+func PlainLinks(text string) string {
+	return reEntity.ReplaceAllStringFunc(text, func(m string) string {
+		target, label, ok := strings.Cut(m[1:len(m)-1], "|")
+		if !ok || strings.HasPrefix(target, "@") || strings.HasPrefix(target, "#") || strings.HasPrefix(target, "!") {
+			return m
+		}
+		target, label = unescape(target), unescape(label)
+		bare := strings.TrimPrefix(strings.TrimPrefix(target, "https://"), "http://")
+		if label == target || strings.TrimSuffix(label, "/") == strings.TrimSuffix(bare, "/") {
+			return target
+		}
+		return label + " (" + target + ")"
+	})
 }
 
 func unescape(s string) string {

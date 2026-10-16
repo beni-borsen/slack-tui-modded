@@ -23,6 +23,9 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 	if m.picker != nil {
 		return m.pickerKey(k)
 	}
+	if m.opener != nil {
+		return m.openerKey(k)
+	}
 	if c := m.confirm; c != nil {
 		m.confirm = nil
 		if k.String() == "y" {
@@ -216,10 +219,7 @@ func (m *Model) listKey(k tea.KeyMsg, l *msgList, inThread bool) tea.Cmd {
 	case "v":
 		return m.openViewer(l, sel)
 	case "o":
-		if files := l.msgs[sel].Files; len(files) > 0 {
-			return tea.Batch(m.openFile(files[0]), m.setStatus("opening "+files[0].Name+"…", false))
-		}
-		return m.setStatus("no file on this message", false)
+		return m.openFrom(l.msgs[sel])
 	}
 	sel = min(max(sel, 0), n-1)
 	if sel == n-1 {
@@ -335,6 +335,12 @@ func (m *Model) insertKey(k tea.KeyMsg) tea.Cmd {
 		return m.paste(string(k.Runes), false)
 	case k.Type == tea.KeyCtrlV && m.editing == nil:
 		return m.paste("", true)
+	case k.Type == tea.KeyCtrlB:
+		m.toggleMark('*')
+		return nil
+	case k.Alt && k.Type == tea.KeyRunes && string(k.Runes) == "i":
+		m.toggleMark('_')
+		return nil
 	case k.Type == tea.KeyCtrlX && len(m.attach) > 0:
 		m.attach = m.attach[:len(m.attach)-1]
 		return m.setStatus(plural(len(m.attach), "1 image left", fmt.Sprintf("%d images left", len(m.attach))), false)
@@ -382,9 +388,12 @@ func (m *Model) insertKey(k tea.KeyMsg) tea.Cmd {
 	return cmd
 }
 
-// fitInput grows the input box with its content, up to 6 lines.
+// fitInput grows the input box with its content, wrapped lines included,
+// up to 8 rows or a third of the window, whichever is less; past that the
+// box scrolls.
 func (m *Model) fitInput() {
-	m.input.SetHeight(min(max(m.input.LineCount(), 1), 6))
+	limit := max(1, min(8, m.height/3))
+	m.input.SetHeight(min(max(m.inputRows(), 1), limit))
 }
 
 // listConv is the conversation a message list belongs to.

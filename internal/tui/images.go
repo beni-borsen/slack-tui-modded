@@ -312,6 +312,19 @@ func (m *Model) cachedFile(f backend.File) (string, error) {
 	return path, os.Rename(tmp, path)
 }
 
+// openURL hands a web link to the desktop's browser.
+func (m *Model) openURL(url string) tea.Cmd {
+	return func() tea.Msg {
+		cmd := exec.Command("xdg-open", url)
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		if err := cmd.Start(); err != nil {
+			return openedMsg{url, fmt.Errorf("xdg-open: %w", err)}
+		}
+		go cmd.Wait()
+		return openedMsg{name: url}
+	}
+}
+
 func cacheDir() string {
 	if d := os.Getenv("XDG_CACHE_HOME"); d != "" {
 		return filepath.Join(d, "slack-tui")

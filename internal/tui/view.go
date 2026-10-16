@@ -38,6 +38,8 @@ func (m *Model) View() string {
 		main = lipgloss.Place(mainW, h, lipgloss.Center, lipgloss.Top, "\n\n"+m.renderSwitcher(mainW, h))
 	case m.picker != nil:
 		main = lipgloss.Place(mainW, h, lipgloss.Center, lipgloss.Top, "\n\n"+m.renderPicker(mainW, h))
+	case m.opener != nil:
+		main = lipgloss.Place(mainW, h, lipgloss.Center, lipgloss.Top, "\n\n"+m.renderOpener(mainW))
 	case m.help:
 		main = lipgloss.Place(mainW, h, lipgloss.Center, lipgloss.Center, m.renderHelp())
 	case m.current == unreadsID:
@@ -139,6 +141,7 @@ func (m *Model) renderInput(w int, isTarget bool, hint string) string {
 		return rule(w, false) + "\n" + sFaint.Render("  "+sKey.Render("i")+sFaint.Render(" "+hint))
 	}
 	m.input.SetWidth(w - 2)
+	m.fitInput() // the width may have changed, and with it the wrapping
 	top := rule(w, true)
 	if m.complete != nil {
 		top = strings.Join(m.renderCompletion(w), "\n") + "\n" + top
@@ -302,6 +305,7 @@ func (m *Model) renderHelp() string {
 		{"enter  (insert)", "send"},
 		{"alt+enter ctrl+j", "new line"},
 		{"ctrl+v  (insert)", "attach clipboard image (again for more)"},
+		{"ctrl+b alt+i  (insert)", "bold / italic the word at the cursor"},
 		{":ta @an #de  (insert)", "complete emoji, people, channels"},
 		{"esc", "back to normal mode"},
 		{"u", "next unread conversation"},
@@ -313,7 +317,7 @@ func (m *Model) renderHelp() string {
 		{"↑  (empty input)", "edit your last message"},
 		{"D", "delete your message"},
 		{"v", "view images full-window: ← → browse, o open, esc close"},
-		{"o", "open the message's file / image"},
+		{"o", "open the message's file or link (a chooser when there are several)"},
 		{"x  (thread)", "close thread"},
 		{"q", "quit"},
 	}

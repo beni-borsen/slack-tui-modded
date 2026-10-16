@@ -20,7 +20,8 @@ func (m *Model) SetClipboard(w io.Writer) { m.clip = w }
 // path Claude Code and vim use: tmux (set-clipboard on) passes it to the
 // terminal, which sets the system clipboard. Works over ssh too.
 func (m *Model) copyMessage(msg backend.Message) tea.Cmd {
-	text, _ := render.Editable(msg.Text, m) // @Name and #channel, not <@U…>
+	// Links as plain URLs, then @Name and #channel instead of <@U…>.
+	text, _ := render.Editable(render.PlainLinks(msg.Text), m)
 	text = strings.TrimSpace(text)
 	if text == "" && len(msg.Files) > 0 {
 		text = msg.Files[0].Permalink // a file-only message: copy its link

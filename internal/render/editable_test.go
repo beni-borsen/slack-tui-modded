@@ -31,3 +31,16 @@ func TestEditableRoundTrip(t *testing.T) {
 		t.Errorf("escape: %q", got)
 	}
 }
+
+func TestMarkdownLinks(t *testing.T) {
+	if got := Encode("see [the docs](https://a.dk/?q=1&r=2) & [x](notaurl)", nil); got != "see <https://a.dk/?q=1&amp;r=2|the docs> &amp; [x](notaurl)" {
+		t.Errorf("Encode = %q", got)
+	}
+	ed, _ := Editable("see <https://a.dk/?q=1&amp;r=2|the docs>", nil)
+	if ed != "see [the docs](https://a.dk/?q=1&r=2)" {
+		t.Errorf("Editable = %q", ed)
+	}
+	if got := Encode(ed, nil); got != "see <https://a.dk/?q=1&amp;r=2|the docs>" {
+		t.Errorf("round trip = %q", got)
+	}
+}

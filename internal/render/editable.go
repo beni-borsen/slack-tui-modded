@@ -2,6 +2,7 @@ package render
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 )
@@ -46,8 +47,10 @@ func Editable(text string, r Resolver) (string, map[string]string) {
 			tok = "@" + strings.TrimPrefix(target, "!")
 		case label == "" || label == target:
 			return target // a bare link; Slack links URLs by itself
+		case strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://"):
+			return "[" + label + "](" + target + ")" // Encode turns it back into a link
 		default:
-			return keep(m) // a labelled link has no typed form; keep it as is
+			return keep(m) // a labelled link with no typed form; keep it as is
 		}
 		tokens[tok] = m
 		return tok
@@ -76,6 +79,11 @@ func Encode(text string, tokens map[string]string) string {
 		}
 		return m
 	})
+	// Markdown links, [label](https://…), become Slack's <url|label>.
+	text = reMdLink.ReplaceAllStringFunc(text, func(m string) string {
+		g := reMdLink.FindStringSubmatch(m)
+		return hold("<" + escape(g[2]) + "|" + escape(g[1]) + ">")
+	})
 	// Longest token first, so "@Anna Jensen" wins over "@Anna".
 	keys := make([]string, 0, len(tokens))
 	for k := range tokens {
@@ -92,4 +100,12 @@ func Encode(text string, tokens map[string]string) string {
 		text = strings.ReplaceAll(text, fmt.Sprintf("\x00%d\x00", i), held[i])
 	}
 	return text
+}
+
+var reMdLink = regexp.MustCompile(`\[([^\[\]\n|]+)\]\((https?://[^\s()<>|]+)\)`)
+
+func escape(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	return strings.ReplaceAll(s, ">", "&gt;")
 }

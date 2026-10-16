@@ -65,3 +65,21 @@ func TestSanitizeWidth(t *testing.T) {
 		t.Errorf("outside tmux the skin tone should stay, got %q", got)
 	}
 }
+
+func TestLinks(t *testing.T) {
+	text := "see <https://github.com/x/y|github.com/x/y> and <https://a.dk/?q=1&amp;r=2|the docs>, <@U1>, <mailto:a@b.dk|a@b.dk>"
+	if got := PlainLinks(text); got != "see https://github.com/x/y and the docs (https://a.dk/?q=1&r=2), <@U1>, a@b.dk (mailto:a@b.dk)" {
+		t.Errorf("PlainLinks = %q", got)
+	}
+	if got := Links(text + " <https://github.com/x/y>"); len(got) != 2 || got[0] != (Link{"https://github.com/x/y", ""}) || got[1] != (Link{"https://a.dk/?q=1&r=2", "the docs"}) {
+		t.Errorf("Links = %q", got)
+	}
+	if got := Hyperlink("https://x.dk", "x"); got != "\x1b]8;;https://x.dk\x1b\\x\x1b]8;;\x1b\\" {
+		t.Errorf("Hyperlink = %q", got)
+	}
+	for _, bad := range []string{"https://x.dk/\x1b]52;c;aGk=\a", "javascript:alert(1)", "file:///etc/passwd"} {
+		if got := Hyperlink(bad, "x"); got != "x" {
+			t.Errorf("Hyperlink(%q) = %q, want plain text", bad, got)
+		}
+	}
+}

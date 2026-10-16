@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -169,7 +170,29 @@ func wrap(s string, width int) []string {
 	if width < 4 {
 		width = 4
 	}
-	return strings.Split(ansi.Wrap(s, width, ""), "\n")
+	return linksPerLine(strings.Split(ansi.Wrap(s, width, ""), "\n"))
+}
+
+var reOSC8 = regexp.MustCompile("\x1b]8;[^;\x1b]*;([^\x1b]*)\x1b\\\\")
+
+// linksPerLine closes a hyperlink at the end of each line it runs over and
+// reopens it on the next. Wrapping alone leaves it open across the newline,
+// and the terminal would then link whatever is drawn next on that row too,
+// like the neighbouring pane.
+func linksPerLine(lines []string) []string {
+	open := ""
+	for i, l := range lines {
+		l = open + l
+		open = ""
+		if ms := reOSC8.FindAllStringSubmatch(l, -1); len(ms) > 0 {
+			if last := ms[len(ms)-1]; last[1] != "" {
+				open = last[0]
+				l += "\x1b]8;;\x1b\\"
+			}
+		}
+		lines[i] = l
+	}
+	return lines
 }
 
 func placeholder(s string, width, height int) string {
