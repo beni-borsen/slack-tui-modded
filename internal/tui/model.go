@@ -87,9 +87,10 @@ type Model struct {
 	focus   focus
 	insert  bool
 	input   textarea.Model
-	viewer  *viewer       // full-window image viewer, when open
-	opener  *opener       // what `o` opens, when a message has several
-	attach  []*attachment // clipboard images going out with the next send
+	viewer  *viewer           // full-window image viewer, when open
+	bots    map[string]string // bot ID → name, looked up with bots.info ("" while pending)
+	opener  *opener           // what `o` opens, when a message has several
+	attach  []*attachment     // clipboard images going out with the next send
 
 	switcher *switcher
 	help     bool
@@ -591,6 +592,12 @@ func (m *Model) senderName(msg backend.Message) string {
 	}
 	if msg.BotName != "" {
 		return msg.BotName
+	}
+	if n := m.bots[msg.BotID]; n != "" {
+		return n
+	}
+	if msg.BotID != "" {
+		return "bot"
 	}
 	if msg.User != "" {
 		return msg.User

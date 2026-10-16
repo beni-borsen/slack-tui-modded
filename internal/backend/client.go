@@ -315,3 +315,16 @@ func (c *Client) OpenDM(ctx context.Context, userID string) (string, error) {
 	}
 	return ch.ID, nil
 }
+
+// BotName looks up a bot's name, for messages that carry only its ID.
+func (c *Client) BotName(ctx context.Context, id string) (string, error) {
+	var b *slack.Bot
+	err := retry(ctx, func() (err error) {
+		b, err = c.api.GetBotInfoContext(ctx, slack.GetBotInfoParameters{Bot: id})
+		return err
+	})
+	if err != nil {
+		return "", fmt.Errorf("bots.info: %w", err)
+	}
+	return b.Name, nil
+}

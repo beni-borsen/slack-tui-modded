@@ -16,7 +16,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	_, cmd := m.update(msg)
 	// Whatever changed, start downloads for images and custom emoji that
 	// came into view.
-	return m, tea.Batch(cmd, m.scanImages(), m.scanEmoji())
+	return m, tea.Batch(cmd, m.scanImages(), m.scanEmoji(), m.scanBots())
 }
 
 func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -263,6 +263,12 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.setStatus("upload failed: "+msg.err.Error(), true)
 		}
 		return m, m.setStatus(plural(len(msg.atts), "sent 1 image", fmt.Sprintf("sent %d images", len(msg.atts))), false)
+
+	case botMsg:
+		if msg.err == nil && msg.name != "" {
+			m.bots[msg.id] = msg.name
+		}
+		return m, nil
 
 	case emojiMsg:
 		if msg.err != nil {

@@ -161,7 +161,7 @@ func translateMessage(e *slackevents.MessageEvent) any {
 	if e.Message != nil {
 		m = *e.Message
 	} else {
-		m = slack.Msg{Timestamp: e.TimeStamp, ThreadTimestamp: e.ThreadTimeStamp, User: e.User, Text: e.Text, SubType: e.SubType, Username: e.Username}
+		m = slack.Msg{Timestamp: e.TimeStamp, ThreadTimestamp: e.ThreadTimeStamp, User: e.User, Text: e.Text, SubType: e.SubType, Username: e.Username, BotID: e.BotID}
 	}
 	if m.Timestamp == "" {
 		m.Timestamp = e.TimeStamp

@@ -87,6 +87,7 @@ type Message struct {
 	ThreadTS    string
 	User        string
 	BotName     string
+	BotID       string // for bots that send neither a profile nor a username
 	Text        string
 	SubType     string
 	ReplyCount  int
@@ -108,17 +109,19 @@ func fromMsg(m slack.Msg) Message {
 		TS:          m.Timestamp,
 		ThreadTS:    m.ThreadTimestamp,
 		User:        m.User,
+		BotID:       m.BotID,
 		Text:        m.Text,
 		SubType:     m.SubType,
 		ReplyCount:  m.ReplyCount,
 		LatestReply: m.LatestReply,
 		Edited:      m.Edited != nil,
 	}
-	if out.User == "" && m.BotProfile != nil {
-		out.BotName = m.BotProfile.Name
-	}
-	if out.BotName == "" && m.Username != "" {
+	// A name the bot gives itself per message ("Deploy v2") wins over its
+	// profile's name ("deploy-bot"), as in Slack.
+	if m.Username != "" {
 		out.BotName = m.Username
+	} else if out.User == "" && m.BotProfile != nil {
+		out.BotName = m.BotProfile.Name
 	}
 	// Bot messages often carry everything in attachments.
 	var extra []string
