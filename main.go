@@ -103,6 +103,11 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("config %s: %w", config.Path(), err)
 	}
+	theme, err := config.LoadTheme()
+	if err != nil {
+		return fmt.Errorf("theme %s: %w", config.ThemePath(), err)
+	}
+	tui.ApplyTheme(theme)
 	tokens, err := auth.Load()
 	if err != nil {
 		return err

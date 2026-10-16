@@ -55,6 +55,34 @@ name = "News"
 items = ["#news"]
 ```
 
+### Theme
+
+Colors live in their own file, `~/.config/slack-tui/theme.toml` (optional), so it can sit in a
+dotfiles repo apart from the workspace-specific `config.toml`. A color is an ANSI 256 number
+(`"75"`) or hex (`"#89b4fa"`, `"#fff"`); leave a key out to keep its default. Unknown keys and
+bad colors stop the client with an error. The defaults:
+
+```toml
+fg               = "252"  # normal text
+dim              = "244"  # timestamps, headers, topics, quotes
+faint            = "238"  # inactive borders
+accent           = "75"   # links, mentions, threads, focused border, normal-mode pill
+unread           = "231"  # unread conversations, titles
+mention          = "203"  # mention badges, "new" line, errors
+self             = "221"  # background of mentions of you
+code_bg          = "236"  # code, reactions
+selection_bg     = "237"  # cursor and active row
+ok               = "114"  # insert-mode pill, success
+warn             = "215"  # warnings
+badge_fg         = "231"  # text on mention badges
+contrast_fg      = "16"   # text on mode pills and mentions of you
+reaction_self_bg = "24"   # reactions you added
+code_fg          = "217"  # inline code
+code_block_fg    = "252"  # code blocks
+custom_emoji     = "180"  # custom emoji shown as :name:
+names = ["75", "114", "176", "215", "80", "211", "150", "179", "141", "109"]  # sender names
+```
+
 ## Keys
 
 | key | |
