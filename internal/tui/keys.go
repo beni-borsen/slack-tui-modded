@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/magnusdalkvist/slack-tui/internal/backend"
+	"github.com/magnusdalkvist/slack-tui/internal/config"
 	"github.com/magnusdalkvist/slack-tui/internal/render"
 )
 
@@ -68,6 +69,15 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 		return m.nextUnread()
 	case "r":
 		return m.markSelectedRead()
+	case "S":
+		m.sideRight = !m.sideRight
+		return m.saveSideState()
+	case "s":
+		m.sideHidden = !m.sideHidden
+		if m.sideHidden && m.focus == fSidebar {
+			m.focus = fMessages
+		}
+		return m.saveSideState()
 	}
 
 	switch m.focus {
@@ -87,6 +97,9 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 		case "esc", "h", "left":
 			m.focus = fMessages
 			return nil
+		case "l", "right":
+			m.toSidebar(k.String())
+			return nil
 		case "x":
 			m.thread = nil
 			m.focus = fMessages
@@ -103,6 +116,33 @@ func (m *Model) cycleFocus(dir int) {
 		n = 3
 	}
 	m.focus = focus((int(m.focus) + dir + n) % n)
+	if m.focus == fSidebar && m.sideHidden {
+		m.cycleFocus(dir)
+	}
+}
+
+// toSidebar focuses the sidebar when it is shown. key is the direction
+// pressed ("h" or "l"); only the one pointing at the sidebar moves there.
+func (m *Model) toSidebar(key string) bool {
+	if m.sideHidden {
+		return false
+	}
+	right := key == "l" || key == "right"
+	if right != m.sideRight {
+		return false
+	}
+	m.focus = fSidebar
+	return true
+}
+
+// saveSideState remembers the sidebar's side and visibility between runs.
+func (m *Model) saveSideState() tea.Cmd {
+	st := config.LoadState()
+	st.SidebarRight, st.SidebarHidden = m.sideRight, m.sideHidden
+	if err := config.SaveState(st); err != nil {
+		return m.setStatus("saving sidebar state: "+err.Error(), true)
+	}
+	return nil
 }
 
 func (m *Model) sidebarKey(k tea.KeyMsg) tea.Cmd {
@@ -123,6 +163,13 @@ func (m *Model) sidebarKey(k tea.KeyMsg) tea.Cmd {
 		m.moveSide(-10)
 	case "z":
 		return m.toggleFold()
+	case "h", "left":
+		if m.sideRight {
+			m.focus = fMessages
+			if m.thread != nil {
+				m.focus = fThread
+			}
+		}
 	case "enter", "l", "right":
 		if m.sideCur >= len(m.side) {
 			return nil
@@ -166,8 +213,19 @@ func (m *Model) listKey(k tea.KeyMsg, l *msgList, inThread bool) tea.Cmd {
 	}
 	n := len(l.msgs)
 	if n == 0 {
-		if k.String() == "h" || k.String() == "left" {
-			m.focus = fSidebar
+		switch k.String() {
+		case "h", "left":
+			if inThread {
+				m.focus = fMessages
+			} else {
+				m.toSidebar(k.String())
+			}
+		case "l", "right":
+			if !inThread && m.thread != nil {
+				m.focus = fThread
+			} else {
+				m.toSidebar(k.String())
+			}
 		}
 		return nil
 	}
@@ -196,12 +254,14 @@ func (m *Model) listKey(k tea.KeyMsg, l *msgList, inThread bool) tea.Cmd {
 		if inThread {
 			m.focus = fMessages
 		} else {
-			m.focus = fSidebar
+			m.toSidebar(k.String())
 		}
 		return nil
 	case "l", "right":
 		if !inThread && m.thread != nil {
 			m.focus = fThread
+		} else {
+			m.toSidebar(k.String())
 		}
 		return nil
 	case "enter", "t":
@@ -257,7 +317,7 @@ func (m *Model) unreadsKey(k tea.KeyMsg) tea.Cmd {
 	case "G", "end":
 		m.unreads.sel = n - 1
 	case "h", "left":
-		m.focus = fSidebar
+		m.toSidebar(k.String())
 	case "enter", "l", "right":
 		if n > 0 {
 			return m.open(convs[min(max(m.unreads.sel, 0), n-1)].ID)

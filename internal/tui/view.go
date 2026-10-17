@@ -31,6 +31,9 @@ func (m *Model) View() string {
 	h := m.height - 1
 	sw := min(m.cfg.SidebarWidth, m.width/3)
 	mainW := m.width - sw - 1
+	if m.sideHidden {
+		mainW = m.width
+	}
 
 	var main string
 	switch {
@@ -55,7 +58,15 @@ func (m *Model) View() string {
 		main = m.renderConvPane(mainW, h)
 	}
 
-	body := lipgloss.JoinHorizontal(lipgloss.Top, fit(m.renderSidebar(sw, h), sw, h), vline(h), fit(main, mainW, h))
+	var body string
+	switch {
+	case m.sideHidden:
+		body = fit(main, mainW, h)
+	case m.sideRight:
+		body = lipgloss.JoinHorizontal(lipgloss.Top, fit(main, mainW, h), vline(h), fit(m.renderSidebar(sw, h), sw, h))
+	default:
+		body = lipgloss.JoinHorizontal(lipgloss.Top, fit(m.renderSidebar(sw, h), sw, h), vline(h), fit(main, mainW, h))
+	}
 	return body + "\n" + m.renderStatus()
 }
 
@@ -311,6 +322,8 @@ func (m *Model) renderHelp() string {
 		{"u", "next unread conversation"},
 		{"r", "mark conversation read"},
 		{"z  enter on header", "fold / unfold sidebar section"},
+		{"S", "move the sidebar to the other side"},
+		{"s", "hide / show the sidebar"},
 		{"+", "react to the message"},
 		{"c", "copy the message text"},
 		{"e", "edit your message"},

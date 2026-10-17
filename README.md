@@ -92,6 +92,8 @@ names = ["75", "114", "176", "215", "80", "211", "150", "179", "141", "109"]  # 
 | `ctrl+k` / `space` | jump to conversation |
 | `j` `k`, `g` `G`, `ctrl+d` `ctrl+u` | move |
 | `h` `l`, `tab` | move between sidebar / messages / thread |
+| `S` | move the sidebar to the other side |
+| `s` | hide / show the sidebar |
 | `enter` | open conversation, or open the selected message's thread |
 | `i` / `a` | write in the focused pane (channel or thread) |
 | `enter` / `alt+enter`, `ctrl+j` | send / new line (insert mode) |

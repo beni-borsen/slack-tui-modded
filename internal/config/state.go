@@ -8,7 +8,9 @@ import (
 
 // State is UI state remembered between runs (not user configuration).
 type State struct {
-	Folded []string `json:"folded"` // sidebar sections that are collapsed
+	Folded        []string `json:"folded"`         // sidebar sections that are collapsed
+	SidebarRight  bool     `json:"sidebar_right"`  // sidebar on the right instead of the left
+	SidebarHidden bool     `json:"sidebar_hidden"` // sidebar not shown
 }
 
 func statePath() string {

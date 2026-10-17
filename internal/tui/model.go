@@ -109,6 +109,8 @@ type Model struct {
 	markSeq     map[string]int
 	seenReplies map[string]bool // conv/ts of live replies already counted
 	folded      map[string]bool // sidebar sections that are collapsed
+	sideRight   bool            // sidebar on the right
+	sideHidden  bool            // sidebar not shown
 	emoji       map[string]string
 
 	gfx          *kitty.Writer // nil when the terminal can't draw images
@@ -230,8 +232,13 @@ type statusClear struct{ seq int }
 
 func (m *Model) Init() tea.Cmd {
 	go m.client.Listen(m.ctx, m.events)
-	for _, name := range config.LoadState().Folded {
+	st := config.LoadState()
+	for _, name := range st.Folded {
 		m.folded[name] = true
+	}
+	m.sideRight, m.sideHidden = st.SidebarRight, st.SidebarHidden
+	if m.sideHidden {
+		m.focus = fMessages
 	}
 	return tea.Batch(m.boot(), m.loadEmoji(), m.waitEvent(), textarea.Blink)
 }
