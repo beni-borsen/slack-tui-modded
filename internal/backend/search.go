@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strconv"
 
 	"github.com/slack-go/slack"
 )
@@ -36,25 +37,36 @@ type SearchPage struct {
 // Search runs Slack's message search (search.messages), so the query takes
 // the same modifiers as in Slack: from:@anna in:#dev after:2026-01-01 "exact".
 func (c *Client) Search(ctx context.Context, query string, page int) (SearchPage, error) {
-	var r *slack.SearchMessages
-	err := retry(ctx, func() (err error) {
-		r, err = c.api.SearchMessagesContext(ctx, query, slack.SearchParameters{
-			Sort: "timestamp", SortDirection: "desc", Highlight: true, Count: 40, Page: page,
-		})
-		return err
-	})
-	if err != nil {
+	// By hand: slack-go's results leave out the files (images included).
+	form := url.Values{
+		"query": {query}, "sort": {"timestamp"}, "sort_dir": {"desc"}, "highlight": {"true"},
+		"count": {"40"}, "page": {strconv.Itoa(page)},
+	}
+	var r struct {
+		slack.SlackResponse
+		Messages struct {
+			Matches []searchMatch `json:"matches"`
+			Total   int           `json:"total"`
+			Paging  slack.Paging  `json:"paging"`
+		} `json:"messages"`
+	}
+	if err := c.postForm(ctx, "search.messages", form, &r); err != nil {
 		return SearchPage{}, fmt.Errorf("search.messages: %w", err)
 	}
-	out := SearchPage{Total: r.Total, Page: r.Paging.Page, Pages: r.Paging.Pages}
-	for _, m := range r.Matches {
+	out := SearchPage{Total: r.Messages.Total, Page: r.Messages.Paging.Page, Pages: r.Messages.Paging.Pages}
+	for _, m := range r.Messages.Matches {
 		out.Hits = append(out.Hits, fromHit(m))
 	}
 	return out, nil
 }
 
-func fromHit(m slack.SearchMessage) Hit {
-	msg := fromMsg(slack.Msg{Timestamp: m.Timestamp, User: m.User, Text: m.Text, Attachments: m.Attachments})
+type searchMatch struct {
+	slack.SearchMessage
+	Files []slack.File `json:"files"`
+}
+
+func fromHit(m searchMatch) Hit {
+	msg := fromMsg(slack.Msg{Timestamp: m.Timestamp, User: m.User, Text: m.Text, Attachments: m.Attachments, Files: m.Files, Blocks: m.Blocks})
 	// Results don't say whether they are thread replies; the permalink does.
 	if u, err := url.Parse(m.Permalink); err == nil {
 		msg.ThreadTS = u.Query().Get("thread_ts")

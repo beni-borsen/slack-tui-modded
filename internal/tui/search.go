@@ -7,7 +7,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/ansi"
 
 	"github.com/magnusdalkvist/slack-tui/internal/backend"
 	"github.com/magnusdalkvist/slack-tui/internal/render"
@@ -117,10 +116,10 @@ func (m *Model) searchResult(msg searchMsg) tea.Cmd {
 	if s.stepping {
 		s.stepping = false
 		if msg.more {
-			return m.searchStep(1)
+			return tea.Batch(m.searchStep(1), m.scanSearchThumbs())
 		}
 	}
-	return nil
+	return m.scanSearchThumbs()
 }
 
 // searchStep is `n` (dir 1) and `N` (-1) outside the results: it goes to the
@@ -220,11 +219,12 @@ func (m *Model) searchKey(k tea.KeyMsg) tea.Cmd {
 		}
 	}
 	s.sel = min(max(s.sel, 0), max(n-1, 0))
+	thumbs := m.scanSearchThumbs()
 	// Near the end: fetch the next page.
 	if n > 0 && s.sel >= n-3 && s.page < s.pages && !s.loading {
-		return m.runSearch(s.query, s.page+1)
+		return tea.Batch(thumbs, m.runSearch(s.query, s.page+1))
 	}
-	return nil
+	return thumbs
 }
 
 // jumpTo opens the conversation (and thread) of a search result and
@@ -536,6 +536,13 @@ func (m *Model) renderSearch(w, h int) string {
 			wrapped = append(wrapped[:3:3], sFaint.Render("…"))
 		}
 		block = append(block, wrapped...)
+		for _, f := range hit.Files {
+			if pic := m.thumbLines(f); pic != nil {
+				block = append(block, pic...)
+			} else if !f.IsImage() || m.gfx == nil {
+				block = append(block, sDim.Render(fileLabel(f)))
+			}
+		}
 		for _, l := range block {
 			all = append(all, bar+l)
 		}
@@ -559,8 +566,26 @@ func (m *Model) renderSearch(w, h int) string {
 	for len(view) < bodyH {
 		view = append(view, "")
 	}
-	for i := range view {
-		view[i] = ansi.Truncate(view[i], w, "…")
-	}
+	truncateRows(view, w)
 	return strings.Join(append(append(header, view...), rule(w, false), footer), "\n")
+}
+
+func fileLabel(f backend.File) string {
+	if f.Title != "" {
+		return f.Title
+	}
+	return f.Name
+}
+
+// scanSearchThumbs fetches previews for the images around the cursor.
+func (m *Model) scanSearchThumbs() tea.Cmd {
+	s := m.search
+	if s == nil {
+		return nil
+	}
+	var files []backend.File
+	for i := max(s.sel-3, 0); i < min(s.sel+10, len(s.hits)); i++ {
+		files = append(files, s.hits[i].Files...)
+	}
+	return m.fetchThumbs(files)
 }

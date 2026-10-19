@@ -117,13 +117,25 @@ func (m *Model) sharedFilesResult(msg convFilesMsg) tea.Cmd {
 // scanThumbs fetches previews for the images around the cursor.
 func (m *Model) scanThumbs() tea.Cmd {
 	s := m.shared
-	if m.gfx == nil || s == nil || s.tab != tabFiles {
+	if s == nil || s.tab != tabFiles {
 		return nil
 	}
 	sel := s.tabs[tabFiles].sel
-	var cmds []tea.Cmd
+	var files []backend.File
 	for i := max(sel-5, 0); i < min(sel+15, len(s.files)); i++ {
-		f := s.files[i].File
+		files = append(files, s.files[i].File)
+	}
+	return m.fetchThumbs(files)
+}
+
+// fetchThumbs starts small previews (thumbKey) for the images among files
+// that don't have one yet.
+func (m *Model) fetchThumbs(files []backend.File) tea.Cmd {
+	if m.gfx == nil {
+		return nil
+	}
+	var cmds []tea.Cmd
+	for _, f := range files {
 		if !f.IsImage() || m.images[thumbKey(f.ID)] != nil {
 			continue
 		}
@@ -132,6 +144,31 @@ func (m *Model) scanThumbs() tea.Cmd {
 		cmds = append(cmds, m.fetchImageSized(thumbKey(f.ID), f, st.id, thumbCols, thumbRows))
 	}
 	return tea.Batch(cmds...)
+}
+
+// thumbLines are the preview's rows, marked as pictures, once it is ready.
+func (m *Model) thumbLines(f backend.File) []string {
+	st := m.images[thumbKey(f.ID)]
+	if st == nil || st.status != imgReady {
+		return nil
+	}
+	var out []string
+	for _, row := range kitty.Placeholder(st.id, st.cols, st.rows) {
+		out = append(out, picture+row)
+	}
+	return out
+}
+
+// truncateRows fits rows to w, leaving picture rows (narrower than the pane;
+// truncating would split their cells) whole.
+func truncateRows(rows []string, w int) {
+	for i, l := range rows {
+		if strings.Contains(l, picture) {
+			rows[i] = strings.Replace(l, picture, "", 1)
+		} else {
+			rows[i] = ansi.Truncate(l, w, "…")
+		}
+	}
 }
 
 // viewSharedImages opens the full-window viewer on the Files tab's images,
@@ -365,12 +402,7 @@ func (m *Model) renderShared(w, h int) string {
 				line += sDim.Render("  " + strings.Join(info, " · "))
 			}
 			by := backend.Message{User: f.User}
-			block = []string{line}
-			if st := m.images[thumbKey(f.ID)]; st != nil && st.status == imgReady {
-				for _, row := range kitty.Placeholder(st.id, st.cols, st.rows) {
-					block = append(block, picture+row)
-				}
-			}
+			block = append([]string{line}, m.thumbLines(f.File)...)
 			block = append(block, nameStyle(senderKey(by)).Render(m.senderName(by))+" "+sTime.Render(relTime(f.Created, m.cfg.TimeFormat)))
 		} else {
 			r := s.links[i]
@@ -417,13 +449,7 @@ func (m *Model) renderShared(w, h int) string {
 	for len(view) < bodyH {
 		view = append(view, "")
 	}
-	for i, l := range view {
-		if strings.Contains(l, picture) {
-			view[i] = strings.Replace(l, picture, "", 1) // narrower than the pane; truncating would split its cells
-		} else {
-			view[i] = ansi.Truncate(l, w, "…")
-		}
-	}
+	truncateRows(view, w)
 	return strings.Join(append(append(header, view...), rule(w, false), footer), "\n")
 }
 

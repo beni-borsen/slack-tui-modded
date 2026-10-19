@@ -1,12 +1,14 @@
 package tui
 
 import (
+	"os"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/magnusdalkvist/slack-tui/internal/backend"
+	"github.com/magnusdalkvist/slack-tui/internal/kitty"
 )
 
 func hit(conv, ts, thread, user, text string) backend.Hit {
@@ -199,5 +201,27 @@ func TestSearchStep(t *testing.T) {
 	m.Update(key("N"))
 	if m.current != "C2" {
 		t.Errorf("N: current %s", m.current)
+	}
+}
+
+func TestSearchThumbs(t *testing.T) {
+	m := fakeModel(t, 100, 30)
+	tty, _ := os.CreateTemp(t.TempDir(), "tty")
+	m.SetGraphics(kitty.NewWriter(tty, false), "")
+	m.Update(key("/"))
+	m.Update(key("x"))
+	m.Update(key("enter"))
+	img := backend.File{ID: "F1", Name: "image.png", Mimetype: "image/png", Thumb: "https://files.slack.com/F1"}
+	doc := backend.File{ID: "F2", Name: "notes.md", Mimetype: "text/markdown"}
+	h := hit("C1", "300.0", "", "U1", "")
+	h.Files = []backend.File{img, doc}
+	m.Update(searchMsg{seq: m.search.seq, query: "x", res: backend.SearchPage{Total: 1, Page: 1, Pages: 1, Hits: []backend.Hit{h}}})
+	if m.images[thumbKey("F1")] == nil {
+		t.Fatal("a result's image should get a preview")
+	}
+	m.Update(imageMsg{fileID: thumbKey("F1"), cols: 10, rows: 3, png: []byte("x")})
+	v := dump(t, m)
+	if strings.Count(v, "\U0010EEEE") < 30 || !strings.Contains(v, "notes.md") {
+		t.Error("preview or file name missing")
 	}
 }

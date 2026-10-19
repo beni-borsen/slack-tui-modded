@@ -73,8 +73,21 @@ func (c *Client) ScheduledMessages(ctx context.Context) ([]Scheduled, error) {
 // deprecated_argument as_user).
 func (c *Client) Unschedule(ctx context.Context, channel, id string) error {
 	form := url.Values{"channel": {channel}, "scheduled_message_id": {id}}
-	err := retry(ctx, func() error {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, slack.APIURL+"chat.deleteScheduledMessage", strings.NewReader(form.Encode()))
+	if err := c.postForm(ctx, "chat.deleteScheduledMessage", form, &slack.SlackResponse{}); err != nil {
+		return fmt.Errorf("chat.deleteScheduledMessage: %w", err)
+	}
+	return nil
+}
+
+// apiResult is an answer from the Web API; Err reports ok=false.
+type apiResult interface{ Err() error }
+
+// postForm calls a Web API method by hand, for where slack-go sends
+// arguments Slack refuses or drops fields we need. out is decoded from the
+// answer.
+func (c *Client) postForm(ctx context.Context, method string, form url.Values, out apiResult) error {
+	return retry(ctx, func() error {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, slack.APIURL+method, strings.NewReader(form.Encode()))
 		if err != nil {
 			return err
 		}
@@ -89,14 +102,9 @@ func (c *Client) Unschedule(ctx context.Context, channel, id string) error {
 			wait, _ := strconv.Atoi(resp.Header.Get("Retry-After"))
 			return &slack.RateLimitedError{RetryAfter: time.Duration(wait) * time.Second}
 		}
-		var r slack.SlackResponse
-		if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
+		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
 			return fmt.Errorf("HTTP %d: %w", resp.StatusCode, err)
 		}
-		return r.Err()
+		return out.Err()
 	})
-	if err != nil {
-		return fmt.Errorf("chat.deleteScheduledMessage: %w", err)
-	}
-	return nil
 }
