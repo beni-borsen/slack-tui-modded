@@ -54,6 +54,19 @@ type User struct {
 	IsBot       bool
 	TZ          string
 	TeamID      string // the person's home workspace
+	// Custom status; StatusExpires is unix seconds, 0 for "don't clear".
+	StatusEmoji   string
+	StatusText    string
+	StatusExpires int64
+}
+
+// Status is the person's custom status, or empty strings once it has
+// expired (Slack clears it a little after that).
+func (u User) Status(now time.Time) (emoji, text string) {
+	if u.StatusExpires > 0 && now.Unix() >= u.StatusExpires {
+		return "", ""
+	}
+	return u.StatusEmoji, u.StatusText
 }
 
 // Label is the name Slack shows for the user.

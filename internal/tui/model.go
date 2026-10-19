@@ -36,6 +36,7 @@ const (
 	userIcon    = "\uf007"
 	groupIcon   = "\uedca"
 	lockIcon    = "\uf456" // private channels
+	dndIcon     = "\uf186" // moon, for Do Not Disturb
 )
 
 const pageSize = 50
@@ -100,6 +101,8 @@ type Model struct {
 
 	switcher *switcher
 	search   *searchState // `/`; nil until first used
+	cmd      *cmdLine     // `:` command line, while open
+	cmdHist  []string     // commands run this session
 	jump     *jumpState   // search result being loaded into view
 	help     bool
 
@@ -140,6 +143,11 @@ type Model struct {
 	allEmoji       []string
 	allEmojiCustom int // len(m.emoji) when allEmoji was built
 
+	dnd      backend.DND     // the user's own Do Not Disturb
+	dndSeq   int             // ignores DND refresh ticks booked before a change
+	away     bool            // the user set themselves away
+	presence map[string]bool // user ID → active, for people in the DM list
+
 	cache *cache.Cache        // nil when caching is off
 	dirty map[string]*msgList // lists to save at the next flush, by cache key
 	saved map[string]uint64   // hash of what was last saved, by kind
@@ -176,6 +184,7 @@ func New(ctx context.Context, client *backend.Client, cfg config.Config) *Model 
 		emojiImgs:     map[string]*imgState{},
 		dirty:         map[string]*msgList{},
 		saved:         map[string]uint64{},
+		presence:      map[string]bool{},
 		imgSem:        make(chan struct{}, 3),
 		current:       unreadsID,
 		focus:         fSidebar,
@@ -501,7 +510,7 @@ func (m *Model) open(id string) tea.Cmd {
 	m.focus = fMessages
 	// Always fetch the newest page: on first open it's the load, after that
 	// it refreshes what live events may have missed.
-	cmds := []tea.Cmd{m.loadHistory(id, false)}
+	cmds := []tea.Cmd{m.loadHistory(id, false), m.presenceFor(id)}
 	cmds = append(cmds, m.markRead(id))
 	return tea.Batch(cmds...)
 }

@@ -49,6 +49,9 @@ type EvConversationsChanged struct{}
 
 type EvUserChanged struct{ User User }
 
+// EvDND is a change to the user's own Do Not Disturb, made here or elsewhere.
+type EvDND struct{ DND DND }
+
 // EvEmojiChanged means custom emoji were added, removed or renamed.
 type EvEmojiChanged struct{}
 
@@ -129,10 +132,21 @@ func (c *Client) translate(data any) any {
 		return EvEmojiChanged{}
 	case *slackevents.UserChangeEvent:
 		u := e.User
+		real := u.RealName
+		if real == "" {
+			real = u.Profile.RealName
+		}
 		return EvUserChanged{User: User{
-			ID: u.ID, Name: u.Name, DisplayName: u.Profile.DisplayName, RealName: u.RealName,
-			Deleted: u.Deleted, IsBot: u.IsBot, TZ: u.TZ,
+			ID: u.ID, Name: u.Name, DisplayName: u.Profile.DisplayName, RealName: real,
+			Deleted: u.Deleted, IsBot: u.IsBot, TZ: u.TZ, TeamID: u.TeamID,
+			StatusEmoji: u.Profile.StatusEmoji, StatusText: u.Profile.StatusText, StatusExpires: int64(u.Profile.StatusExpiration),
 		}}
+	case *slackevents.DndUpdatedEvent:
+		if e.User != c.SelfID {
+			return nil
+		}
+		s := e.DndStatus
+		return EvDND{DND: newDND(s.DndEnabled, s.NextDndStartTs, s.NextDndEndTs, s.SnoozeEnabled, s.SnoozeEndtime)}
 	}
 	return nil
 }

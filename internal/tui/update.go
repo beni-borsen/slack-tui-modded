@@ -156,7 +156,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// goroutine, so it runs under the program (and not after a test).
 		users, convs := msg.users, msg.convs
 		save := func() tea.Msg { names.SaveTo(names.Path(), users, convs); return nil }
-		return m, tea.Batch(cmd, m.refreshLater(), save)
+		return m, tea.Batch(cmd, m.refreshLater(), save, m.loadMe(), m.pollPresence())
 
 	case convsMsg:
 		if msg.err != nil {
@@ -354,6 +354,58 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case errMsg:
 		return m, m.setStatus(msg.err.Error(), true)
 
+	case meMsg:
+		if msg.err != nil {
+			return m, m.setStatus(msg.err.Error(), true)
+		}
+		m.away = msg.away
+		return m, m.setDND(msg.dnd)
+
+	case dndMsg:
+		if msg.err != nil {
+			return m, m.setStatus(msg.err.Error(), true)
+		}
+		cmd := m.setDND(msg.dnd)
+		if until, on := msg.dnd.Until(time.Now()); on {
+			return m, tea.Batch(cmd, m.setStatus("notifications paused until "+clock(until, m.cfg.TimeFormat), false))
+		}
+		return m, tea.Batch(cmd, m.setStatus("notifications on", false))
+
+	case dndTick:
+		if msg.seq != m.dndSeq {
+			return m, nil
+		}
+		return m, m.reloadDND()
+
+	case presenceMsg:
+		for id, active := range msg.active {
+			m.presence[id] = active
+		}
+		var cmd tea.Cmd
+		if msg.poll {
+			cmd = m.presenceLater()
+		}
+		if msg.err != nil {
+			return m, tea.Batch(cmd, m.setStatus("presence: "+msg.err.Error(), true))
+		}
+		return m, cmd
+
+	case presenceTick:
+		return m, m.pollPresence()
+
+	case statusSetMsg:
+		return m, m.statusSet(msg)
+
+	case awayMsg:
+		if msg.err != nil {
+			return m, m.setStatus(msg.err.Error(), true)
+		}
+		m.away = msg.away
+		if msg.away {
+			return m, m.setStatus("you show as away", false)
+		}
+		return m, m.setStatus("you show as active when Slack sees you", false)
+
 	case markTick:
 		if m.markSeq[msg.id] == msg.seq && m.current == msg.id {
 			return m, m.markRead(msg.id)
@@ -407,6 +459,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case backend.EvUserChanged:
 		m.users[msg.User.ID] = msg.User
 		return m, m.waitEvent()
+
+	case backend.EvDND:
+		return m, tea.Batch(m.setDND(msg.DND), m.waitEvent())
 	}
 
 	if m.insert {

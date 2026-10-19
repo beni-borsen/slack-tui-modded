@@ -23,6 +23,9 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 	if m.search != nil && m.search.open {
 		return m.searchKey(k)
 	}
+	if m.cmd != nil {
+		return m.cmdKey(k)
+	}
 	if m.picker != nil {
 		return m.pickerKey(k)
 	}
@@ -61,6 +64,8 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 		return nil
 	case "/":
 		return m.openSearch()
+	case ":":
+		return m.openCmd()
 	case "tab":
 		m.cycleFocus(1)
 		return nil

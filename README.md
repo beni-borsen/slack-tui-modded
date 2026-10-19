@@ -39,6 +39,7 @@ completion refreshes it in the background when it's over a day old.
 time_format = "15:04"     # Go time layout
 sidebar_width = 30
 refresh_minutes = 5       # re-check unread markers (catches messages read on another device)
+presence_minutes = 3      # re-check who is active among the DMs in the sidebar; -1 turns it off
 images = "auto"           # inline images when the terminal can draw them, or "off"
 image_max_cols = 40       # thumbnail size limit, in cells
 image_max_rows = 12
@@ -72,6 +73,7 @@ items = ["#news"]
 | `:ta` `@an` `#de` (insert mode) | complete emoji, people (also @here/@channel/@everyone) and channels: `tab`/`enter` inserts, `↑` `↓` choose, `esc` closes. People and channels are sent as real mentions |
 | `esc` | back to normal mode |
 | `/` | search messages: Slack's own query syntax (`from:@anna in:#dev after:2026-01-01 "exact words"`); typing `@`, `#` or a name after `from:`/`in:` suggests people and channels (Slack's search matches handles, not display names, so pick from the list); `enter` goes to the message (its thread for replies), `o` opens it in Slack |
+| `:` | command line (below): `tab` completes, `↑` `↓` history, `esc` leaves |
 | `u` | next unread conversation |
 | `r` | mark conversation read |
 | `c` | copy the selected message's text (OSC 52, so it works through tmux and ssh) |
@@ -82,6 +84,19 @@ items = ["#news"]
 | `v` | full-window image viewer from the selected message: `←` `→` step through every image in the conversation or thread, `o` opens externally, `esc` closes |
 | `x` | close thread |
 | `?` | help |
+
+## Commands
+
+| command | |
+|---|---|
+| `:status :emoji: text [expiry]` | set your status; expiry is `30m`, `2h`, `1h30m`, `1d`, `until 17:00` or `until tomorrow` (midnight). Emoji complete as you type |
+| `:status` / `:status clear` | show / clear your status |
+| `:dnd 30m` / `:dnd until 17:00` / `:dnd off` | pause notifications (Do Not Disturb), or turn them back on; `:dnd` shows the state |
+| `:away` / `:back` | show as away / let Slack decide again |
+
+A unique prefix is enough (`:st`, `:d 1h`). Your DND, away state and status sit in the status bar.
+People in the DM list get a green icon while active (checked every `presence_minutes`) and their
+status emoji after the name; the open DM's header shows their status and when it ends.
 
 ## Images
 
@@ -108,6 +123,7 @@ background. Without a connection it keeps showing the cache and retries every 30
   (rate-limited, ~50/min), so unread markers fill in progressively.
 - Reading a channel on another device sends no event; markers are re-checked every `refresh_minutes`.
 - No typing indicators, huddles, drafts, or Slack's own sidebar sections.
+- No presence events for user tokens: presence is polled with `users.getPresence`, one call per person.
 
 ## License
 

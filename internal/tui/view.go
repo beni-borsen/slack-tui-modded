@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -58,6 +59,9 @@ func (m *Model) View() string {
 	}
 
 	body := lipgloss.JoinHorizontal(lipgloss.Top, fit(m.renderSidebar(sw, h), sw, h), vline(h), fit(main, mainW, h))
+	if m.cmd != nil {
+		return m.overlayCmdCompletion(body) + "\n" + m.renderCmdLine()
+	}
 	return body + "\n" + m.renderStatus()
 }
 
@@ -108,6 +112,19 @@ func (m *Model) renderConvPane(w, h int) string {
 		return placeholder("conversation not found", w, h)
 	}
 	title := sTitle.Render(m.convTitle(c))
+	if c.Kind == backend.KindDM && c.UserID != m.client.SelfID {
+		if active, ok := m.presence[c.UserID]; ok && active {
+			title += "  " + sOK.Render("active")
+		} else if ok {
+			title += "  " + sDim.Render("away")
+		}
+		if line := m.statusLine(c.UserID); line != "" {
+			if exp := m.users[c.UserID].StatusExpires; exp > 0 {
+				line += sDim.Render(" until " + clock(time.Unix(exp, 0), m.cfg.TimeFormat))
+			}
+			title += "  " + line
+		}
+	}
 	if c.Topic != "" {
 		title += "  " + sTopic.Render(strings.ReplaceAll(render.Mrkdwn(c.Topic, m, mdStyles), "\n", " "))
 	}
@@ -274,7 +291,7 @@ func (m *Model) renderStatus() string {
 	default:
 		conn = sWarn.Render("○ connecting")
 	}
-	parts := []string{mode, conn}
+	parts := append([]string{mode, conn}, m.meStatus()...)
 	if m.confirm != nil {
 		parts = append(parts, sWarn.Render(m.confirm.prompt))
 	}
@@ -289,7 +306,7 @@ func (m *Model) renderStatus() string {
 		}
 	}
 	left := strings.Join(parts, "  ")
-	right := sDim.Render("ctrl+k jump · / search · ? help ")
+	right := sDim.Render("ctrl+k jump · / search · : command · ? help ")
 	gap := m.width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 1 {
 		return ansi.Truncate(left, m.width, "…")
@@ -313,6 +330,7 @@ func (m *Model) renderHelp() string {
 		{":ta @an #de  (insert)", "complete emoji, people, channels"},
 		{"esc", "back to normal mode"},
 		{"/", "search messages (from:@x in:#y after:date); enter goes there"},
+		{":", "command line (below); tab completes, ↑ ↓ history"},
 		{"u", "next unread conversation"},
 		{"r", "mark conversation read"},
 		{"z  enter on header", "fold / unfold sidebar section"},
@@ -329,6 +347,13 @@ func (m *Model) renderHelp() string {
 	var lines []string
 	for _, r := range rows {
 		lines = append(lines, sKey.Render(fmt.Sprintf("%-18s", r[0]))+"  "+sNormal.Render(r[1]))
+	}
+	lines = append(lines, "", sTitle.Render("Commands"), "")
+	for _, c := range commands {
+		lines = append(lines, sKey.Render(fmt.Sprintf("%-18s", ":"+c.name))+"  "+sNormal.Render(c.help))
+		if c.args != "" {
+			lines = append(lines, strings.Repeat(" ", 20)+sDim.Render(c.args))
+		}
 	}
 	return sBox.Render(sTitle.Render("Keys") + "\n\n" + strings.Join(lines, "\n") + "\n\n" + sDim.Render("any key to close"))
 }

@@ -266,8 +266,8 @@ func (m *Model) sideRow(it sideItem, cursor bool, width int) string {
 		return marker + row
 	}
 
-	var icon, label string
-	unread, badge := false, 0
+	var icon, label, status string
+	unread, badge, active := false, 0, false
 	if it.id == unreadsID {
 		n := m.unreadCount()
 		icon, label, unread = unreadsIcon, "Unreads", n > 0
@@ -291,6 +291,12 @@ func (m *Model) sideRow(it sideItem, cursor bool, width int) string {
 		}
 		label = m.convLabel(c)
 		unread, badge = c.Unread(), c.Mentions
+		if c.Kind == backend.KindDM {
+			active = m.presence[c.UserID]
+			if s := m.statusEmoji(c.UserID); s != "" {
+				status = " " + s
+			}
+		}
 	}
 
 	marker := " "
@@ -301,18 +307,25 @@ func (m *Model) sideRow(it sideItem, cursor bool, width int) string {
 	if badge > 0 {
 		badgeStr = sBadge.Render(fmt.Sprint(badge))
 	}
-	room := width - 4 - lipgloss.Width(badgeStr)
+	room := width - 4 - lipgloss.Width(badgeStr) - ansi.StringWidth(status)
 	label = ansi.Truncate(label, room, "…")
 
 	style := sDim
 	if unread {
 		style = sUnread
 	}
-	text := style.Render(icon + " " + label)
-	pad := max(0, width-1-lipgloss.Width(text)-lipgloss.Width(badgeStr))
-	row := text + strings.Repeat(" ", pad) + badgeStr
+	// People who are active get a green icon, as Slack's green dot.
+	iconStyle := style
 	if it.id == m.current {
-		row = sActive.Render(ansi.Strip(icon+" "+label)+strings.Repeat(" ", pad)) + badgeStr
+		style, iconStyle = sActive, sActive
 	}
+	if active {
+		iconStyle = iconStyle.Foreground(cOK)
+	}
+	text := iconStyle.Render(icon) + style.Render(" "+label)
+	pad := max(0, width-1-lipgloss.Width(text)-ansi.StringWidth(status)-lipgloss.Width(badgeStr))
+	// The status emoji is drawn as is: a custom one is an image whose
+	// placeholder cells must keep their own colour.
+	row := text + status + style.Render(strings.Repeat(" ", pad)) + badgeStr
 	return marker + row
 }

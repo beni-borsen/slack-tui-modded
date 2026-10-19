@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -83,6 +84,23 @@ func (m *Model) scanEmoji() tea.Cmd {
 	if c := m.complete; c != nil {
 		for _, n := range c.visible() {
 			want(n)
+		}
+	}
+	if c := m.cmd; c != nil && c.complete != nil {
+		for _, n := range c.complete.visible() {
+			want(n)
+		}
+	}
+	// Status emoji: the user's own, and those of people in the DM list.
+	wantStatus := func(userID string) {
+		if e, _ := m.users[userID].Status(time.Now()); e != "" {
+			want(strings.Trim(e, ":"))
+		}
+	}
+	wantStatus(m.client.SelfID)
+	for _, it := range m.side {
+		if c := m.convs[it.id]; c != nil && c.Kind == backend.KindDM {
+			wantStatus(c.UserID)
 		}
 	}
 	return tea.Batch(cmds...)

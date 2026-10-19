@@ -32,6 +32,9 @@ type Config struct {
 	// RefreshMinutes is how often unread markers are re-checked against
 	// Slack, to pick up messages read on another device.
 	RefreshMinutes int `toml:"refresh_minutes"`
+	// PresenceMinutes is how often the presence of the people in the
+	// sidebar's DMs is checked; negative turns it off.
+	PresenceMinutes int `toml:"presence_minutes"`
 	// Images is "auto" (inline images when the terminal can draw them) or "off".
 	Images       string `toml:"images"`
 	ImageMaxCols int    `toml:"image_max_cols"`
@@ -41,7 +44,7 @@ type Config struct {
 }
 
 func Default() Config {
-	return Config{TimeFormat: "15:04", SidebarWidth: 30, RefreshMinutes: 5, Images: "auto", ImageMaxCols: 40, ImageMaxRows: 12}
+	return Config{TimeFormat: "15:04", SidebarWidth: 30, RefreshMinutes: 5, PresenceMinutes: 3, Images: "auto", ImageMaxCols: 40, ImageMaxRows: 12}
 }
 
 // Dir is the config directory.
@@ -80,6 +83,9 @@ func Load() (Config, error) {
 	}
 	if c.RefreshMinutes <= 0 {
 		c.RefreshMinutes = d.RefreshMinutes
+	}
+	if c.PresenceMinutes == 0 {
+		c.PresenceMinutes = d.PresenceMinutes
 	}
 	if c.Images == "" {
 		c.Images = d.Images
