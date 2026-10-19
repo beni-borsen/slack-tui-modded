@@ -38,13 +38,17 @@ var errNotAnimated = errors.New("not an animated GIF")
 // maxCols×maxRows cells. errNotAnimated (or another error) means: show it
 // as a still image.
 func scaleAnim(data []byte, cw, ch, maxCols, maxRows int) (*animFrames, int, int, error) {
-	return decodeAnim(data, cw, ch, maxCols, maxRows, false, maxAnimBytes)
+	return decodeAnim(data, cw, ch, maxCols, maxRows, maxAnimBytes)
 }
 
-// decodeAnim is scaleAnim; grow fills the box with a smaller GIF, as the
-// viewer does. Frames are never made bigger than the GIF: the terminal
-// stretches them over the box, which keeps them small to send.
-func decodeAnim(data []byte, cw, ch, maxCols, maxRows int, grow bool, maxBytes int) (*animFrames, int, int, error) {
+// decodeAnim is scaleAnim with a limit on the frames' size.
+//
+// Frames are scaled to exactly their box. When the terminal has to scale a
+// picture over its box, it does so cell by cell and the seams show as
+// lines. So a GIF is never grown to fill the viewer's window, like still
+// images are: at full-window size its frames are far too much to make and
+// send (live: 150MB and 20s for a 142-frame GIF).
+func decodeAnim(data []byte, cw, ch, maxCols, maxRows int, maxBytes int) (*animFrames, int, int, error) {
 	cfg, err := gif.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
 		return nil, 0, 0, err
@@ -65,20 +69,8 @@ func decodeAnim(data []byte, cw, ch, maxCols, maxRows int, grow bool, maxBytes i
 	if w <= 0 || h <= 0 || n > maxAnimFrames || w*h*n > maxAnimPixels {
 		return nil, 0, 0, errors.New("animation too large")
 	}
-	gw, gh := w, h
-	if grow {
-		f := max(float64(maxCols*cw)/float64(w), float64(maxRows*ch)/float64(h), 1)
-		gw, gh = int(float64(w)*f), int(float64(h)*f)
-	}
-	cols, rows := fitCells(gw, gh, cw, ch, maxCols, maxRows)
-	bw, bh := cols*cw, rows*ch
-	dw, dh := bw, bw*h/w
-	if dh > bh {
-		dw, dh = bh*w/h, bh
-	}
-	if dw > w {
-		dw, dh = w, h
-	}
+	cols, rows := fitCells(w, h, cw, ch, maxCols, maxRows)
+	dw, dh := cols*cw, rows*ch
 	canvas := image.NewRGBA(image.Rect(0, 0, w, h))
 	out := &animFrames{}
 	total := 0

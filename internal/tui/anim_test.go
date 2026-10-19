@@ -48,6 +48,9 @@ func TestScaleAnim(t *testing.T) {
 	if len(a.frames) != 3 || cols != 5 || rows < 1 {
 		t.Fatalf("%d frames, %dx%d", len(a.frames), cols, rows)
 	}
+	if img, _ := png.Decode(bytes.NewReader(a.frames[0])); img.Bounds().Dx() != cols*8 || img.Bounds().Dy() != rows*16 {
+		t.Errorf("frames should be exactly the box (%dx%d px), not %v: scaling shows seams", cols*8, rows*16, img.Bounds())
+	}
 	if a.delays[0] != 50*time.Millisecond || a.delays[2] != 150*time.Millisecond {
 		t.Errorf("delays %v", a.delays)
 	}
@@ -143,8 +146,8 @@ func TestViewerAnim(t *testing.T) {
 	if !st.ready {
 		t.Fatal("frames not marked sent")
 	}
-	if st.cols*8 <= 40 {
-		t.Errorf("a small GIF should fill the window: %d cols", st.cols)
+	if st.cols != 5 {
+		t.Errorf("a GIF plays at its own size (40px = 5 cols), not stretched: %d cols", st.cols)
 	}
 	now := time.Now()
 	m.stepAnims(now)

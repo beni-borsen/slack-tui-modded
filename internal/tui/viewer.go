@@ -135,7 +135,8 @@ func (m *Model) fetchFull(f backend.File, w, h int) tea.Cmd {
 			return viewLoadedMsg{fileID: f.ID, w: w, h: h, err: err}
 		}
 		if f.Anim != "" {
-			if a, cols, rows, err := decodeAnim(data, cw, ch, w, h, true, maxViewAnimBytes); err == nil {
+			// At its own size: see decodeAnim.
+			if a, cols, rows, err := decodeAnim(data, cw, ch, w, h, maxViewAnimBytes); err == nil {
 				return viewLoadedMsg{fileID: f.ID, w: w, h: h, png: a.frames[0], cols: cols, rows: rows, anim: a}
 			}
 		}
