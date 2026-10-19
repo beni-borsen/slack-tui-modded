@@ -41,6 +41,9 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 	if m.chans != nil {
 		return m.chansKey(k)
 	}
+	if m.shared != nil {
+		return m.sharedKey(k)
+	}
 	if m.picker != nil {
 		return m.pickerKey(k)
 	}
@@ -83,6 +86,8 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 		return m.openCmd()
 	case "P":
 		return m.openPins()
+	case "F":
+		return m.openShared()
 	case "tab":
 		m.cycleFocus(1)
 		return nil

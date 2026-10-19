@@ -31,6 +31,8 @@ var commands = []command{
 		func(m *Model, a string) tea.Cmd { return m.cmdBookmark(a) }},
 	{"pins", "", "pinned messages and bookmarks of this conversation (P)",
 		func(m *Model, _ string) tea.Cmd { return m.openPins() }},
+	{"files", "", "files and links shared in this conversation (F)",
+		func(m *Model, _ string) tea.Cmd { return m.openShared() }},
 	{"join", "[#channel]", "join a public channel; alone browses them all",
 		func(m *Model, a string) tea.Cmd { return m.cmdJoin(a) }},
 	{"leave", "[#channel]", "leave this channel (or the one named)",

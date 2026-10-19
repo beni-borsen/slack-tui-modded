@@ -146,14 +146,7 @@ func fromMsg(m slack.Msg) Message {
 	// Bot messages often carry everything in attachments.
 	var extra []string
 	for _, a := range m.Attachments {
-		switch {
-		case a.Text != "":
-			extra = append(extra, a.Text)
-		case a.Fallback != "":
-			extra = append(extra, a.Fallback)
-		case a.Title != "":
-			extra = append(extra, a.Title)
-		}
+		extra = append(extra, attachmentText(a)...)
 	}
 	if len(extra) > 0 {
 		if out.Text != "" {
@@ -165,19 +158,46 @@ func fromMsg(m slack.Msg) Message {
 		out.Reactions = append(out.Reactions, Reaction{Name: r.Name, Count: r.Count, Users: r.Users})
 	}
 	for _, f := range m.Files {
-		thumb := f.Thumb720
-		if thumb == "" {
-			thumb = f.Thumb480
-		}
-		if thumb == "" {
-			thumb = f.Thumb360
-		}
-		out.Files = append(out.Files, File{
-			ID: f.ID, Name: f.Name, Title: f.Title, Mimetype: f.Mimetype, URL: f.URLPrivate, Permalink: f.Permalink,
-			Thumb: thumb, W: f.OriginalW, H: f.OriginalH,
-		})
+		out.Files = append(out.Files, fromFile(f))
 	}
 	return out
+}
+
+// attachmentText is what Slack shows of an attachment: the pretext, the
+// title (a link when it has one) and the text, or the fallback when there is
+// neither title nor text.
+func attachmentText(a slack.Attachment) []string {
+	var out []string
+	if a.Pretext != "" {
+		out = append(out, a.Pretext)
+	}
+	switch {
+	case a.Title != "" && a.TitleLink != "":
+		title := strings.NewReplacer("|", "¦", ">", "›").Replace(a.Title) // must not end the link early
+		out = append(out, "<"+a.TitleLink+"|"+title+">")
+	case a.Title != "":
+		out = append(out, a.Title)
+	}
+	if a.Text != "" {
+		out = append(out, a.Text)
+	} else if a.Title == "" && a.Fallback != "" {
+		out = append(out, a.Fallback)
+	}
+	return out
+}
+
+func fromFile(f slack.File) File {
+	thumb := f.Thumb720
+	if thumb == "" {
+		thumb = f.Thumb480
+	}
+	if thumb == "" {
+		thumb = f.Thumb360
+	}
+	return File{
+		ID: f.ID, Name: f.Name, Title: f.Title, Mimetype: f.Mimetype, URL: f.URLPrivate, Permalink: f.Permalink,
+		Thumb: thumb, W: f.OriginalW, H: f.OriginalH,
+	}
 }
 
 // TSLess compares two Slack timestamps ("1712345678.123456"). An empty

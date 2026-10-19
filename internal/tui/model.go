@@ -107,6 +107,7 @@ type Model struct {
 	pins     *pinsState    // `P`, while open
 	sched    *schedState   // `:scheduled`, while open
 	chans    *chansState   // `:join` channel browser, while open
+	shared   *sharedState  // `F`: files and links of a conversation, while open
 	cmd      *cmdLine      // `:` command line, while open
 	cmdHist  []string      // commands run this session
 	bmEdit   *bookmarkEdit // the bookmark the :bookmark being run changes

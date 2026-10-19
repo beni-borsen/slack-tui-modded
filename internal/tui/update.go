@@ -95,6 +95,17 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case invitedMsg:
 		return m, m.invitedResult(msg)
 
+	case convFilesMsg:
+		m.sharedFilesResult(msg)
+		return m, nil
+
+	case convLinksMsg:
+		m.sharedLinksResult(msg)
+		return m, nil
+
+	case fileShareMsg:
+		return m, m.fileShareResult(msg)
+
 	case bookmarkedMsg:
 		return m, m.bookmarkedResult(msg)
 

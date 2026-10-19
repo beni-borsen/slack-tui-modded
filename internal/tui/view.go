@@ -51,6 +51,8 @@ func (m *Model) View() string {
 		main = m.renderScheduled(mainW, h)
 	case m.chans != nil:
 		main = m.renderChans(mainW, h)
+	case m.shared != nil:
+		main = m.renderShared(mainW, h)
 	case m.current == unreadsID:
 		main = m.renderUnreads(mainW, h)
 	case m.thread != nil && mainW >= 80:
@@ -350,6 +352,7 @@ func (m *Model) renderHelp() string {
 		{"D", "delete your message"},
 		{"p", "pin / unpin the message"},
 		{"P", "pinned messages and bookmarks; a e d add / edit / remove a bookmark"},
+		{"F", "files and links shared in the conversation"},
 		{"v", "view images full-window: ← → browse, o open, esc close"},
 		{"o", "open the message's file or link (a chooser when there are several)"},
 		{"x  (thread)", "close thread"},

@@ -54,6 +54,7 @@ func (m *Model) openPins() tea.Cmd {
 		return m.setStatus("open a conversation first", false)
 	}
 	m.closeSearch()
+	m.shared, m.chans = nil, nil
 	m.pins = &pinsState{conv: m.current, loading: true}
 	return m.loadPins(m.current)
 }
