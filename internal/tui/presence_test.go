@@ -28,6 +28,14 @@ func TestParseStatus(t *testing.T) {
 		{in: "Focus until 14:30", text: "Focus", expires: time.Date(2026, 10, 19, 14, 30, 0, 0, time.Local)},
 		{in: "Early start until 8:00", text: "Early start", expires: time.Date(2026, 10, 20, 8, 0, 0, 0, time.Local)},
 		{in: ":car: 2d", emoji: ":car:", expires: now.Add(48 * time.Hour)},
+		{in: "Focus until 15", text: "Focus", expires: time.Date(2026, 10, 19, 15, 0, 0, 0, time.Local)},
+		{in: "Focus untill 1530", text: "Focus", expires: time.Date(2026, 10, 19, 15, 30, 0, 0, time.Local)},
+		{in: "Focus til 3pm", text: "Focus", expires: time.Date(2026, 10, 19, 15, 0, 0, 0, time.Local)},
+		{in: "Focus till 3:30 pm", text: "Focus", expires: time.Date(2026, 10, 19, 15, 30, 0, 0, time.Local)},
+		{in: "Focus until 3", text: "Focus", expires: time.Date(2026, 10, 19, 15, 0, 0, 0, time.Local)},
+		{in: "Focus until 11am", text: "Focus", expires: time.Date(2026, 10, 19, 11, 0, 0, 0, time.Local)},
+		{in: "Focus until 9am", text: "Focus", expires: time.Date(2026, 10, 20, 9, 0, 0, 0, time.Local)},
+		{in: "Focus until 13pm", text: "Focus until 13pm"},
 		{in: "back in 5", text: "back in 5"},               // a bare number stays text
 		{in: "Meeting at 14:00", text: "Meeting at 14:00"}, // so does a time without "until"
 		{in: ":thumbsup::skin-tone-3: ok", emoji: ":thumbsup::skin-tone-3:", text: "ok"},
@@ -274,6 +282,8 @@ func TestStatusTemplates(t *testing.T) {
 		{"focus", ":headphones:", "Focusing", time.Date(2026, 10, 19, 15, 0, 0, 0, time.Local)},
 		{"home", ":house:", "WFH", time.Time{}},
 		{"home until tomorrow", ":house:", "WFH", time.Date(2026, 10, 20, 0, 0, 0, 0, time.Local)},
+		{"lunch until 13", ":hamburger:", "Lunch", time.Date(2026, 10, 19, 13, 0, 0, 0, time.Local)},
+		{"lunch untill 1:30 pm", ":hamburger:", "Lunch", time.Date(2026, 10, 19, 13, 30, 0, 0, time.Local)},
 	}
 	for _, c := range cases {
 		e, txt, exp, err := m.statusFromTemplate(c.in, now)

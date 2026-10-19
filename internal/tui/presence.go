@@ -238,6 +238,8 @@ var (
 	reDuration    = regexp.MustCompile(`^(?:\d+[wdhm])+$`)
 	reDurPart     = regexp.MustCompile(`(\d+)([wdhm])`)
 	reClock       = regexp.MustCompile(`^(\d{1,2})[:.](\d{2})$`)
+	// After "until": 15, 15:30, 15.30, 1530, 3pm, 3:30pm.
+	reUntilClock = regexp.MustCompile(`^(\d{1,2})(?:[:.]?(\d{2}))?(am|pm)?$`)
 )
 
 // parseDuration reads "30m", "1h30m", "2d" or "1w"; a bare number is minutes.
@@ -266,28 +268,58 @@ func parseUntil(s string, now time.Time) (time.Time, bool) {
 		y, mo, d := now.Date()
 		return time.Date(y, mo, d+1, 0, 0, 0, 0, now.Location()), true
 	}
-	g := reClock.FindStringSubmatch(s)
+	g := reUntilClock.FindStringSubmatch(s)
 	if g == nil {
 		return time.Time{}, false
 	}
 	h, _ := strconv.Atoi(g[1])
 	mi, _ := strconv.Atoi(g[2])
+	switch g[3] {
+	case "am", "pm":
+		if h < 1 || h > 12 {
+			return time.Time{}, false
+		}
+		h %= 12
+		if g[3] == "pm" {
+			h += 12
+		}
+	}
 	if h > 23 || mi > 59 {
 		return time.Time{}, false
 	}
 	y, mo, d := now.Date()
 	t := time.Date(y, mo, d, h, mi, 0, 0, now.Location())
+	// A bare small hour already past ("until 3" at 10:00) means the
+	// afternoon; with minutes ("until 8:00") it is taken as written.
+	if !t.After(now) && g[2] == "" && g[3] == "" && h < 12 && t.Add(12*time.Hour).After(now) {
+		t = t.Add(12 * time.Hour)
+	}
 	if !t.After(now) {
 		t = t.AddDate(0, 0, 1)
 	}
 	return t, true
 }
 
+// isUntil accepts "until" and its common misspellings and short forms.
+func isUntil(w string) bool {
+	switch strings.ToLower(w) {
+	case "until", "untill", "till", "til":
+		return true
+	}
+	return false
+}
+
 // cutExpiry takes an expiry off the end of the words: a duration
 // ("30m", "2h", "1d") or "until 17:00" / "until tomorrow".
 func cutExpiry(words []string, now time.Time) ([]string, time.Time) {
 	n := len(words)
-	if n >= 2 && strings.EqualFold(words[n-2], "until") {
+	// "until 3 pm": the am/pm as its own word.
+	if n >= 3 && isUntil(words[n-3]) && (strings.EqualFold(words[n-1], "am") || strings.EqualFold(words[n-1], "pm")) {
+		if t, ok := parseUntil(words[n-2]+words[n-1], now); ok {
+			return words[:n-3], t
+		}
+	}
+	if n >= 2 && isUntil(words[n-2]) {
 		if t, ok := parseUntil(words[n-1], now); ok {
 			return words[:n-2], t
 		}

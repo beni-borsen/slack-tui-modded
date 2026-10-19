@@ -102,7 +102,7 @@ expires = "until tomorrow"
 
 | command | |
 |---|---|
-| `:status :emoji: text [expiry]` | set your status; expiry is `30m`, `2h`, `1h30m`, `1d`, `until 17:00` or `until tomorrow` (midnight). Emoji complete as you type |
+| `:status :emoji: text [expiry]` | set your status; expiry is `30m`, `2h`, `1h30m`, `1d`, `until 17:00` (also `until 17`, `1730`, `5pm`, `till`/`untill`) or `until tomorrow` (midnight). Emoji complete as you type |
 | `:status` / `:status clear` | show / clear your status |
 | `:status <template> [expiry]` | a status from `[[status]]` in the config; after `:status ` the templates are suggested |
 | `:dnd 30m` / `:dnd until 17:00` / `:dnd off` | pause notifications (Do Not Disturb), or turn them back on; `:dnd` shows the state |
