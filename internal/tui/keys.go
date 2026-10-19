@@ -26,6 +26,9 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 	if m.pins != nil {
 		return m.pinsKey(k)
 	}
+	if m.chans != nil {
+		return m.chansKey(k)
+	}
 	if m.cmd != nil {
 		return m.cmdKey(k)
 	}

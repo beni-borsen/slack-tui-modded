@@ -111,6 +111,10 @@ expires = "until tomorrow"
 | `:dnd 30m` / `:dnd until 17:00` / `:dnd off` | pause notifications (Do Not Disturb), or turn them back on; `:dnd` shows the state |
 | `:later 30m` / `:later 15:30` / `:later tomorrow 8:30` / `:later fri` | schedule the message you are writing (also `2h`, `3pm`, `today 17`, a weekday; a day alone means 9:00, a bare hour below 7 the afternoon). Text only — Slack can't schedule files |
 | `:scheduled` | every scheduled message: `enter` goes to its conversation, `e` takes it back into the composer, `d` cancels it, `R` reloads. The conversation header counts what is waiting there |
+| `:join` / `:join #name` | browse the workspace's public channels (type to filter, `enter` joins or opens) / join one by name. A search result in a channel you aren't in offers to join it |
+| `:leave` / `:leave #name` | leave this channel (or the one named), after a y/n |
+| `:create [--private] name` | make a channel (lower-cased, spaces become dashes) and open it |
+| `:invite @person …` | add people to this channel; tab completes handles |
 | `:away` / `:back` | show as away / let Slack decide again |
 
 A unique prefix is enough (`:st`, `:d 1h`). Your DND, away state and status sit in the status bar.

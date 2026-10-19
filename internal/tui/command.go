@@ -29,6 +29,14 @@ var commands = []command{
 		func(m *Model, _ string) tea.Cmd { return m.openScheduled() }},
 	{"pins", "", "pinned messages and bookmarks of this conversation (P)",
 		func(m *Model, _ string) tea.Cmd { return m.openPins() }},
+	{"join", "[#channel]", "join a public channel; alone browses them all",
+		func(m *Model, a string) tea.Cmd { return m.cmdJoin(a) }},
+	{"leave", "[#channel]", "leave this channel (or the one named)",
+		func(m *Model, a string) tea.Cmd { return m.cmdLeave(a) }},
+	{"create", "[--private] name", "make a channel",
+		func(m *Model, a string) tea.Cmd { return m.cmdCreate(a) }},
+	{"invite", "@person [@person…]", "add people to this channel",
+		func(m *Model, a string) tea.Cmd { return m.cmdInvite(a) }},
 	{"away", "", "show as away",
 		func(m *Model, _ string) tea.Cmd { return m.cmdAway(true) }},
 	{"back", "", "show as active again (Slack decides)",
@@ -124,8 +132,7 @@ func (m *Model) cmdKey(k tea.KeyMsg) tea.Cmd {
 	}
 	var cmd tea.Cmd
 	c.input, cmd = c.input.Update(k)
-	m.updateCmdCompletion()
-	return cmd
+	return tea.Batch(cmd, m.updateCmdCompletion())
 }
 
 func (m *Model) browseCmdHist(back bool) {
@@ -148,14 +155,16 @@ func (m *Model) browseCmdHist(back bool) {
 }
 
 // updateCmdCompletion suggests commands while the first word is typed, and
-// emoji after that (":status :pal").
-func (m *Model) updateCmdCompletion() {
+// after that channels or people (":join #de", ":invite @an") or emoji
+// (":status :pal"). The command is a fetch the suggestions wait for.
+func (m *Model) updateCmdCompletion() tea.Cmd {
 	c := m.cmd
 	before := []rune(c.input.Value())
 	before = before[:min(c.input.Position(), len(before))]
 	text := string(before)
 
 	var cp *completion
+	var load tea.Cmd
 	if !strings.Contains(text, " ") {
 		var items []compItem
 		for _, cmd := range commands {
@@ -166,6 +175,8 @@ func (m *Model) updateCmdCompletion() {
 		if len(items) > 0 {
 			cp = &completion{trigger: "cmd", query: text, items: items}
 		}
+	} else if arg, ok, cmd := m.argCompletion(text); ok {
+		cp, load = arg, cmd
 	} else if items := m.templateItems(text); items != nil {
 		_, arg, _ := strings.Cut(text, " ")
 		cp = &completion{trigger: "tpl", query: arg, items: items}
@@ -183,12 +194,13 @@ func (m *Model) updateCmdCompletion() {
 		if cp == nil {
 			c.dismissed = ""
 		}
-		return
+		return load
 	}
-	if old := c.complete; old != nil && old.trigger == cp.trigger && old.query == cp.query {
-		return
+	if old := c.complete; old != nil && old.trigger == cp.trigger && old.query == cp.query && len(old.items) == len(cp.items) {
+		return load
 	}
 	c.complete = cp
+	return load
 }
 
 func (m *Model) acceptCmdCompletion() {

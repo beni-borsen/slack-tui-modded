@@ -93,10 +93,25 @@ func TestSearchJumpThread(t *testing.T) {
 
 func TestSearchNotMember(t *testing.T) {
 	m := fakeModel(t, 100, 24)
-	m.search = &searchState{open: true, query: "x", hits: []backend.Hit{{Message: backend.Message{TS: "1.0"}, Channel: "C9", ChannelName: "elsewhere"}}}
+	m.search = &searchState{open: true, query: "x", hits: []backend.Hit{
+		{Message: backend.Message{TS: "1.0"}, Channel: "C9", ChannelName: "elsewhere"},
+		{Message: backend.Message{TS: "2.0"}, Channel: "C8", ChannelName: "hidden", IsPrivate: true},
+	}}
 	m.Update(key("enter"))
-	if m.jump != nil || !strings.Contains(m.status, "not a member of #elsewhere") {
-		t.Errorf("status %q jump %+v", m.status, m.jump)
+	if m.confirm == nil || !strings.Contains(dump(t, m), "not a member of #elsewhere. join it? y/n") {
+		t.Fatal("a public channel we aren't in should offer to join")
+	}
+	m.Update(key("n"))
+	m.search.open = true // `/` again
+	m.Update(key("j"))
+	m.Update(key("enter"))
+	if m.confirm != nil || !strings.Contains(m.status, "not a member of #hidden") {
+		t.Errorf("a private channel should open in Slack: status %q", m.status)
+	}
+	// Joined: the conversation appears and the message is looked for.
+	m.Update(joinedMsg{conv: backend.Conversation{ID: "C9", Name: "elsewhere", Kind: backend.KindChannel}, name: "elsewhere", then: &backend.Message{TS: "1.0"}})
+	if m.convs["C9"] == nil || m.current != "C9" || m.jump == nil || m.jump.ts != "1.0" {
+		t.Errorf("after joining: current %s jump %+v", m.current, m.jump)
 	}
 }
 

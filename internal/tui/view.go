@@ -49,6 +49,8 @@ func (m *Model) View() string {
 		main = m.renderPins(mainW, h)
 	case m.sched != nil:
 		main = m.renderScheduled(mainW, h)
+	case m.chans != nil:
+		main = m.renderChans(mainW, h)
 	case m.current == unreadsID:
 		main = m.renderUnreads(mainW, h)
 	case m.thread != nil && mainW >= 80:

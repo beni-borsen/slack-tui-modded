@@ -80,6 +80,21 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case unscheduledMsg:
 		return m, m.unscheduledResult(msg)
 
+	case publicChansMsg:
+		return m, m.publicResult(msg)
+
+	case joinedMsg:
+		return m, m.joinedResult(msg)
+
+	case leftMsg:
+		return m, m.leftResult(msg)
+
+	case createdMsg:
+		return m, m.createdResult(msg)
+
+	case invitedMsg:
+		return m, m.invitedResult(msg)
+
 	case pinsMsg:
 		m.pinsResult(msg)
 		return m, nil
@@ -198,14 +213,16 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.mergeConv(c)
 		}
+		var cmds []tea.Cmd
 		for id := range m.convs {
 			if !live[id] {
-				delete(m.convs, id)
+				cmds = append(cmds, m.dropConv(id)) // left or archived elsewhere
 			}
 		}
+		m.syncPublic()
 		m.rebuildSidebar()
 		m.loadInfos(fresh)
-		return m, nil
+		return m, tea.Batch(cmds...)
 
 	case infoMsg:
 		m.infoPending--

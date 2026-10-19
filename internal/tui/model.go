@@ -106,6 +106,7 @@ type Model struct {
 	search   *searchState // `/`; nil until first used
 	pins     *pinsState   // `P`, while open
 	sched    *schedState  // `:scheduled`, while open
+	chans    *chansState  // `:join` channel browser, while open
 	cmd      *cmdLine     // `:` command line, while open
 	cmdHist  []string     // commands run this session
 	jump     *jumpState   // search result being loaded into view
@@ -150,6 +151,9 @@ type Model struct {
 
 	scheduled   []backend.Scheduled // the user's scheduled messages, soonest first
 	schedThread map[string]string   // scheduled ID → thread, for those scheduled here (Slack's list leaves it out)
+
+	public        []backend.PublicChannel // the workspace's public channels; nil until `:join` first fetches them
+	publicLoading bool
 
 	dnd      backend.DND     // the user's own Do Not Disturb
 	dndSeq   int             // ignores DND refresh ticks booked before a change

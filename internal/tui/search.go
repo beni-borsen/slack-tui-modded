@@ -196,8 +196,17 @@ func (m *Model) searchKey(k tea.KeyMsg) tea.Cmd {
 // selects the message once it has loaded.
 func (m *Model) jumpTo(h backend.Hit) tea.Cmd {
 	if m.convs[h.Channel] == nil {
-		// Not a member (a public channel found by search): Slack can show it.
-		return tea.Batch(m.openURL(h.Permalink), m.setStatus("not a member of "+m.hitWhere(h)+", opening in Slack…", false))
+		if h.IsPrivate || h.IsGroup || h.ChannelName == "" || strings.HasPrefix(h.ChannelName, "U") || strings.HasPrefix(h.ChannelName, "W") {
+			return tea.Batch(m.openURL(h.Permalink), m.setStatus("not a member of "+m.hitWhere(h)+", opening in Slack…", false))
+		}
+		// A public channel we aren't in: join it to go there.
+		m.closeSearch()
+		msg := h.Message
+		m.confirm = &confirmState{
+			prompt: "not a member of #" + h.ChannelName + ". join it? y/n",
+			yes:    func() tea.Cmd { return m.join(h.Channel, h.ChannelName, &msg) },
+		}
+		return nil
 	}
 	m.closeSearch()
 	return m.goToMessage(h.Channel, h.Message)
