@@ -53,9 +53,8 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 	if m.sched != nil {
 		return m.schedKey(k)
 	}
-	if m.help {
-		m.help = false
-		return nil
+	if m.help != nil {
+		return m.helpKey(k)
 	}
 	if m.insert {
 		return m.insertKey(k)
@@ -71,8 +70,7 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 	case "q":
 		return m.quit()
 	case "?":
-		m.help = true
-		return nil
+		return m.openHelp()
 	case "ctrl+k", " ":
 		m.switcher = m.newSwitcher()
 		return nil

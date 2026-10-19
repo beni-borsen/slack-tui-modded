@@ -41,8 +41,8 @@ func (m *Model) View() string {
 		main = lipgloss.Place(mainW, h, lipgloss.Center, lipgloss.Top, "\n\n"+m.renderPicker(mainW, h))
 	case m.opener != nil:
 		main = lipgloss.Place(mainW, h, lipgloss.Center, lipgloss.Top, "\n\n"+m.renderOpener(mainW))
-	case m.help:
-		main = lipgloss.Place(mainW, h, lipgloss.Center, lipgloss.Center, m.renderHelp())
+	case m.help != nil:
+		main = lipgloss.Place(mainW, h, lipgloss.Center, lipgloss.Top, "\n"+m.renderHelp(mainW, h-1))
 	case m.search != nil && m.search.open:
 		main = m.renderSearch(mainW, h)
 	case m.pins != nil:
@@ -321,54 +321,4 @@ func (m *Model) renderStatus() string {
 		return ansi.Truncate(left, m.width, "…")
 	}
 	return left + strings.Repeat(" ", gap) + right
-}
-
-func (m *Model) renderHelp() string {
-	rows := [][2]string{
-		{"ctrl+k / space", "jump to conversation"},
-		{"j k  ↑ ↓", "move"},
-		{"g G", "top / bottom"},
-		{"ctrl+d ctrl+u", "half page"},
-		{"h l  tab", "move between panes"},
-		{"enter", "open conversation / thread"},
-		{"i a", "write a message (in the focused pane)"},
-		{"enter  (insert)", "send"},
-		{"alt+enter ctrl+j", "new line"},
-		{"ctrl+v  (insert)", "attach clipboard image (again for more)"},
-		{"ctrl+b alt+i  (insert)", "bold / italic the word at the cursor"},
-		{"ctrl+s  (insert)", "send later: :later 30m / 15:30 / tomorrow / fri 9"},
-		{":ta @an #de  (insert)", "complete emoji, people, channels"},
-		{"esc", "back to normal mode"},
-		{"/", "search messages (from:@x in:#y after:date); enter goes there"},
-		{"n N", "next / previous search result, without the list"},
-		{":", "command line (below); tab completes, ↑ ↓ history"},
-		{"u", "next unread conversation"},
-		{"r", "mark conversation read"},
-		{"z  enter on header", "fold / unfold sidebar section"},
-		{"+", "react to the message"},
-		{"c", "copy the message text"},
-		{"e", "edit your message"},
-		{"↑  (empty input)", "edit your last message"},
-		{"D", "delete your message"},
-		{"p", "pin / unpin the message"},
-		{"P", "pinned messages and bookmarks; a e d add / edit / remove a bookmark"},
-		{"F", "files and links shared in the conversation"},
-		{"v", "view images full-window: ← → browse, o open, esc close"},
-		{"o", "open the message's file or link (a chooser when there are several)"},
-		{"s", "save the message's files to Downloads"},
-		{"x  (thread)", "close thread"},
-		{"q", "quit"},
-	}
-	var lines []string
-	for _, r := range rows {
-		lines = append(lines, sKey.Render(fmt.Sprintf("%-18s", r[0]))+"  "+sNormal.Render(r[1]))
-	}
-	lines = append(lines, "", sTitle.Render("Commands"), "")
-	for _, c := range commands {
-		lines = append(lines, sKey.Render(fmt.Sprintf("%-18s", ":"+c.name))+"  "+sNormal.Render(c.help))
-		if c.args != "" {
-			lines = append(lines, strings.Repeat(" ", 20)+sDim.Render(c.args))
-		}
-	}
-	return sBox.Render(sTitle.Render("Keys") + "\n\n" + strings.Join(lines, "\n") + "\n\n" + sDim.Render("any key to close"))
 }

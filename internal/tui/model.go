@@ -112,7 +112,7 @@ type Model struct {
 	cmdHist  []string      // commands run this session
 	bmEdit   *bookmarkEdit // the bookmark the :bookmark being run changes
 	jump     *jumpState    // search result being loaded into view
-	help     bool
+	help     *helpState    // `?`, while open
 
 	booted      bool
 	fromCache   bool // drawn from the cache; the API hasn't answered yet

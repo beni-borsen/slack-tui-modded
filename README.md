@@ -103,7 +103,7 @@ expires = "until tomorrow"
 | `s` | save the message's files to your Downloads folder (or `download_dir` in config.toml); never overwrites — `plan (1).pdf` |
 | `v` | full-window image viewer from the selected message: `←` `→` step through every image in the conversation or thread, `o` opens externally, `esc` closes |
 | `x` | close thread |
-| `?` | help |
+| `?` | help: every key and command, filtered as you type — a key (`P`) finds what it does, words (`pin`, `thread`) find keys; `enter` on a command starts it |
 
 ## Commands
 
