@@ -244,6 +244,11 @@ func (m *Model) sharedKey(k tea.KeyMsg) tea.Cmd {
 		}
 		f := s.files[min(t.sel, n-1)].File
 		return tea.Batch(m.openFile(f), m.setStatus("opening "+f.Name+"…", false))
+	case "s", "d":
+		if n == 0 || s.tab != tabFiles {
+			return nil
+		}
+		return m.saveFiles([]backend.File{s.files[min(t.sel, n-1)].File})
 	case "c":
 		if n == 0 {
 			return nil
@@ -318,7 +323,7 @@ func (m *Model) renderShared(w, h int) string {
 	}
 	header := []string{title, " " + strings.Join(tabs, " "), rule(w, true)}
 	footer := ansi.Truncate(sFaint.Render("  ")+sKey.Render("enter")+sFaint.Render(" go to message  ")+
-		sKey.Render("o")+sFaint.Render(" open  ")+sKey.Render("v")+sFaint.Render(" view images  ")+sKey.Render("c")+sFaint.Render(" copy link  ")+
+		sKey.Render("o")+sFaint.Render(" open  ")+sKey.Render("s")+sFaint.Render(" save  ")+sKey.Render("v")+sFaint.Render(" view images  ")+sKey.Render("c")+sFaint.Render(" copy link  ")+
 		sKey.Render("tab")+sFaint.Render(" files / links  ")+sKey.Render("esc")+sFaint.Render(" close"), w, "…")
 	t := &s.tabs[s.tab]
 	if t.err != "" {

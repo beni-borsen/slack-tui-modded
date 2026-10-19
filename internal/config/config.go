@@ -52,6 +52,9 @@ type Config struct {
 	ImageMaxRows int    `toml:"image_max_rows"`
 	// ImageViewer opens images with `o`; other files use xdg-open.
 	ImageViewer string `toml:"image_viewer"`
+	// DownloadDir is where `s` saves files; empty means the desktop's
+	// Downloads folder. A leading ~ is the home directory.
+	DownloadDir string `toml:"download_dir"`
 }
 
 func Default() Config {

@@ -140,6 +140,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.removeMessage(msg.conv, msg.ts)
 		return m, m.setStatus("message deleted", false)
 
+	case savedMsg:
+		return m, m.savedResult(msg)
+
 	case openedMsg:
 		if msg.err != nil {
 			return m, m.setStatus("open "+msg.name+": "+msg.err.Error(), true)

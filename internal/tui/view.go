@@ -355,6 +355,7 @@ func (m *Model) renderHelp() string {
 		{"F", "files and links shared in the conversation"},
 		{"v", "view images full-window: ← → browse, o open, esc close"},
 		{"o", "open the message's file or link (a chooser when there are several)"},
+		{"s", "save the message's files to Downloads"},
 		{"x  (thread)", "close thread"},
 		{"q", "quit"},
 	}

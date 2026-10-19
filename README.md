@@ -44,6 +44,7 @@ images = "auto"           # inline images when the terminal can draw them, or "o
 image_max_cols = 40       # thumbnail size limit, in cells
 image_max_rows = 12
 image_viewer = "loupe"    # opens images with `o` (default: loupe if installed); other files use xdg-open
+download_dir = "~/Downloads"  # where `s` saves files (default: the desktop's Downloads folder)
 
 # Custom sidebar sections, above the built-in Channels, Direct messages (one-to-one first,
 # then groups, each by recent activity) and External (Slack Connect channels and people).
@@ -97,8 +98,9 @@ expires = "until tomorrow"
 | `D` | delete your message (asks y/n) |
 | `p` | pin / unpin the message |
 | `P` | the conversation's bookmarks and pinned messages: `enter` opens a bookmark or goes to the message, `o` opens it in Slack, `p` unpins, `a` / `e` / `d` add, edit or remove a bookmark (also `:pins`) |
-| `F` | files and links shared in the conversation, on two tabs (`tab` switches): `enter` goes to the message that shared it, `o` opens it, `c` copies its link; images get a preview, `v` views them full-window. Newest first, reaching back through all history (also `:files`) |
+| `F` | files and links shared in the conversation, on two tabs (`tab` switches): `enter` goes to the message that shared it, `o` opens it, `s` saves it to Downloads, `c` copies its link; images get a preview, `v` views them full-window. Newest first, reaching back through all history (also `:files`) |
 | `o` | open the selected message's file (images in `image_viewer`) or link (browser); with several, a chooser: `1`-`9` or `enter` opens |
+| `s` | save the message's files to your Downloads folder (or `download_dir` in config.toml); never overwrites — `plan (1).pdf` |
 | `v` | full-window image viewer from the selected message: `←` `→` step through every image in the conversation or thread, `o` opens externally, `esc` closes |
 | `x` | close thread |
 | `?` | help |

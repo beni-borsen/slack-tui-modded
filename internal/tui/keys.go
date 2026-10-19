@@ -254,6 +254,8 @@ func (m *Model) listKey(k tea.KeyMsg, l *msgList, inThread bool) tea.Cmd {
 		return m.openViewer(l, sel)
 	case "o":
 		return m.openFrom(l.msgs[sel])
+	case "s":
+		return m.saveFiles(l.msgs[sel].Files)
 	}
 	sel = min(max(sel, 0), n-1)
 	if sel == n-1 {
