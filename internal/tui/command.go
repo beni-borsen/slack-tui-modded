@@ -160,6 +160,9 @@ func (m *Model) updateCmdCompletion() {
 		if len(items) > 0 {
 			cp = &completion{trigger: "cmd", query: text, items: items}
 		}
+	} else if items := m.templateItems(text); items != nil {
+		_, arg, _ := strings.Cut(text, " ")
+		cp = &completion{trigger: "tpl", query: arg, items: items}
 	} else if g := reEmojiQuery.FindStringSubmatch(strings.ToLower(text)); g != nil {
 		var items []compItem
 		for _, n := range m.matchEmoji(g[1]) {

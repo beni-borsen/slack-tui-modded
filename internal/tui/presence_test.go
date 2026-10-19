@@ -11,6 +11,7 @@ import (
 	"github.com/muesli/termenv"
 
 	"github.com/magnusdalkvist/slack-tui/internal/backend"
+	"github.com/magnusdalkvist/slack-tui/internal/config"
 )
 
 func TestParseStatus(t *testing.T) {
@@ -226,3 +227,78 @@ func TestPresenceUsers(t *testing.T) {
 }
 
 var _ tea.Msg = presenceTick{}
+
+func TestStatusEmojiOnSelectedRow(t *testing.T) {
+	m := fakeModel(t, 100, 24)
+	u := m.users["U1"]
+	u.StatusEmoji = ":house:"
+	m.Update(backend.EvUserChanged{User: u})
+	m.open("D1")
+	for _, it := range m.side {
+		if it.id == "D1" {
+			row := m.sideRow(it, false, 29)
+			if !strings.Contains(row, selBgOn+" 🏠"+selBgOff) {
+				t.Errorf("status emoji lacks the selection background: %q", row)
+			}
+			return
+		}
+	}
+	t.Fatal("D1 not in the sidebar")
+}
+
+func TestStatusTemplates(t *testing.T) {
+	m := fakeModel(t, 100, 24)
+	m.cfg.Statuses = []config.StatusTemplate{
+		{Name: "lunch", Emoji: "hamburger", Text: "Lunch", Expires: "1h"},
+		{Name: "focus", Emoji: ":headphones:", Text: "Focusing", Expires: "until 15:00"},
+		{Name: "home", Emoji: ":house:", Text: "WFH"},
+		{Name: "broken", Text: "x", Expires: "soonish"},
+	}
+	now := time.Date(2026, 10, 19, 10, 0, 0, 0, time.Local)
+	cases := []struct {
+		in, emoji, text string
+		expires         time.Time
+	}{
+		{"lunch", ":hamburger:", "Lunch", now.Add(time.Hour)},
+		{"Lunch 30m", ":hamburger:", "Lunch", now.Add(30 * time.Minute)},
+		{"focus", ":headphones:", "Focusing", time.Date(2026, 10, 19, 15, 0, 0, 0, time.Local)},
+		{"home", ":house:", "WFH", time.Time{}},
+		{"home until tomorrow", ":house:", "WFH", time.Date(2026, 10, 20, 0, 0, 0, 0, time.Local)},
+	}
+	for _, c := range cases {
+		e, txt, exp, err := m.statusFromTemplate(c.in, now)
+		if err != nil || e != c.emoji || txt != c.text || !exp.Equal(c.expires) {
+			t.Errorf("%q: got (%q, %q, %v, %v)", c.in, e, txt, exp, err)
+		}
+	}
+	if _, _, _, err := m.statusFromTemplate("broken", now); err == nil || !strings.Contains(err.Error(), "soonish") {
+		t.Errorf("bad expiry: %v", err)
+	}
+	if _, _, _, err := m.statusFromTemplate("lunch with anna", now); err == nil {
+		t.Error("extra words after a template should be refused")
+	}
+	if _, _, _, err := m.statusFromTemplate("Coffee break", now); err != errNoTemplate {
+		t.Errorf("free text: %v", err)
+	}
+
+	// Suggested after ":status ", picked with tab.
+	m.Update(key(":"))
+	typeText(m, "status ")
+	if c := m.cmd.complete; c == nil || len(c.items) != 4 {
+		t.Fatalf("want all templates, got %+v", m.cmd.complete)
+	}
+	typeText(m, "fo")
+	if c := m.cmd.complete; c == nil || len(c.items) != 1 || c.items[0].label != "focus" {
+		t.Fatalf("want focus, got %+v", m.cmd.complete)
+	}
+	if v := dump(t, m); !strings.Contains(v, "🎧  focus  Focusing · until 15:00") {
+		t.Errorf("template row missing")
+	}
+	m.handleKey(tabKey())
+	if got := m.cmd.input.Value(); got != "status focus " {
+		t.Errorf("tab gave %q", got)
+	}
+	if m.cmd.complete != nil {
+		t.Error("list should close after the template")
+	}
+}

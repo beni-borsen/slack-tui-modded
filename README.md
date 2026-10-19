@@ -56,6 +56,19 @@ items = ["#dev", "#deploys", "@anna"]   # "#channel" or "@username / display nam
 [[section]]
 name = "News"
 items = ["#news"]
+
+# Status templates for `:status <name>`; `:status lunch 30m` overrides the expiry.
+[[status]]
+name = "lunch"
+emoji = ":hamburger:"
+text = "Lunch"
+expires = "1h"            # 30m, 2h, 1d, "until 17:00", "until tomorrow"; leave out to keep it
+
+[[status]]
+name = "home"
+emoji = ":house:"
+text = "Working from home"
+expires = "until tomorrow"
 ```
 
 ## Keys
@@ -91,6 +104,7 @@ items = ["#news"]
 |---|---|
 | `:status :emoji: text [expiry]` | set your status; expiry is `30m`, `2h`, `1h30m`, `1d`, `until 17:00` or `until tomorrow` (midnight). Emoji complete as you type |
 | `:status` / `:status clear` | show / clear your status |
+| `:status <template> [expiry]` | a status from `[[status]]` in the config; after `:status ` the templates are suggested |
 | `:dnd 30m` / `:dnd until 17:00` / `:dnd off` | pause notifications (Do Not Disturb), or turn them back on; `:dnd` shows the state |
 | `:away` / `:back` | show as away / let Slack decide again |
 

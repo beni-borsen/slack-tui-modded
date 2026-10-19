@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/magnusdalkvist/slack-tui/internal/backend"
+	"github.com/magnusdalkvist/slack-tui/internal/config"
 	"github.com/magnusdalkvist/slack-tui/internal/render"
 )
 
@@ -333,7 +334,10 @@ func (m *Model) cmdStatus(args string) tea.Cmd {
 	case "clear", "off", "none":
 		return m.sendStatus("", "", time.Time{})
 	}
-	emoji, text, expires, err := parseStatus(args, time.Now())
+	emoji, text, expires, err := m.statusFromTemplate(args, time.Now())
+	if errors.Is(err, errNoTemplate) {
+		emoji, text, expires, err = parseStatus(args, time.Now())
+	}
 	if err != nil {
 		return m.setStatus(err.Error(), true)
 	}
@@ -343,6 +347,69 @@ func (m *Model) cmdStatus(args string) tea.Cmd {
 		}
 	}
 	return m.sendStatus(emoji, text, expires)
+}
+
+var errNoTemplate = errors.New("no such template")
+
+// statusFromTemplate reads "<template> [expiry]": a status from the
+// config, with its expiry replaced when one is given.
+func (m *Model) statusFromTemplate(args string, now time.Time) (emoji, text string, expires time.Time, err error) {
+	words := strings.Fields(args)
+	if len(words) == 0 {
+		return "", "", time.Time{}, errNoTemplate
+	}
+	tpl, ok := m.statusTemplate(words[0])
+	if !ok {
+		return "", "", time.Time{}, errNoTemplate
+	}
+	exp := tpl.Expires
+	if len(words) > 1 {
+		exp = strings.Join(words[1:], " ")
+	}
+	if exp != "" {
+		rest, t := cutExpiry(strings.Fields(exp), now)
+		if len(rest) > 0 || t.IsZero() {
+			return "", "", time.Time{}, fmt.Errorf("status %s: can't read expiry %q (30m, 2h, until 17:00, until tomorrow)", tpl.Name, exp)
+		}
+		expires = t
+	}
+	if tpl.Emoji != "" {
+		emoji = ":" + strings.Trim(tpl.Emoji, ":") + ":"
+	}
+	return emoji, tpl.Text, expires, nil
+}
+
+func (m *Model) statusTemplate(name string) (config.StatusTemplate, bool) {
+	for _, t := range m.cfg.Statuses {
+		if t.Name != "" && strings.EqualFold(t.Name, name) {
+			return t, true
+		}
+	}
+	return config.StatusTemplate{}, false
+}
+
+// templateItems suggests status templates while the first word after
+// ":status " is typed; nil when that isn't what is being typed.
+func (m *Model) templateItems(text string) []compItem {
+	name, arg, ok := strings.Cut(text, " ")
+	if !ok || strings.Contains(arg, " ") || strings.HasPrefix(arg, ":") {
+		return nil
+	}
+	if c, ok := findCommand(name); !ok || c.name != "status" {
+		return nil
+	}
+	var items []compItem
+	for _, t := range m.cfg.Statuses {
+		if t.Name == "" || !strings.HasPrefix(strings.ToLower(t.Name), strings.ToLower(arg)) || strings.EqualFold(t.Name, arg) {
+			continue
+		}
+		detail := t.Text
+		if t.Expires != "" {
+			detail = strings.TrimSpace(detail + " · " + t.Expires)
+		}
+		items = append(items, compItem{insert: t.Name, label: t.Name, emoji: strings.Trim(t.Emoji, ":"), detail: detail})
+	}
+	return items
 }
 
 func (m *Model) sendStatus(emoji, text string, expires time.Time) tea.Cmd {

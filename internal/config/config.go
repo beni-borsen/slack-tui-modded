@@ -23,8 +23,19 @@ type Section struct {
 	Icon string `toml:"icon"`
 }
 
+// StatusTemplate is a ready-made status for `:status <name>`.
+type StatusTemplate struct {
+	Name  string `toml:"name"`
+	Emoji string `toml:"emoji"`
+	Text  string `toml:"text"`
+	// Expires is "30m", "2h", "1d", "until 17:00" or "until tomorrow";
+	// empty keeps the status until changed.
+	Expires string `toml:"expires"`
+}
+
 type Config struct {
-	Sections []Section `toml:"section"`
+	Sections []Section        `toml:"section"`
+	Statuses []StatusTemplate `toml:"status"`
 	// TimeFormat is a Go time layout for message timestamps.
 	TimeFormat string `toml:"time_format"`
 	// SidebarWidth is the width of the left column in cells.

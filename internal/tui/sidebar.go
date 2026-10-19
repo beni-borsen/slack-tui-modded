@@ -325,7 +325,11 @@ func (m *Model) sideRow(it sideItem, cursor bool, width int) string {
 	text := iconStyle.Render(icon) + style.Render(" "+label)
 	pad := max(0, width-1-lipgloss.Width(text)-ansi.StringWidth(status)-lipgloss.Width(badgeStr))
 	// The status emoji is drawn as is: a custom one is an image whose
-	// placeholder cells must keep their own colour.
+	// placeholder cells must keep their own foreground colour, so only the
+	// selection background goes around it.
+	if status != "" && it.id == m.current {
+		status = selBgOn + status + selBgOff
+	}
 	row := text + status + style.Render(strings.Repeat(" ", pad)) + badgeStr
 	return marker + row
 }

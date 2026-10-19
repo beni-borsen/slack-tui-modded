@@ -22,6 +22,10 @@ var (
 	cOK      = lipgloss.Color("114")
 	cWarn    = lipgloss.Color("215")
 
+	// cSelBg as raw SGR, for content that sets its own foreground.
+	selBgOn  = "\x1b[48;5;237m"
+	selBgOff = "\x1b[49m"
+
 	nameColors = []lipgloss.Color{"75", "114", "176", "215", "80", "211", "150", "179", "141", "109"}
 )
 
