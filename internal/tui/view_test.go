@@ -250,3 +250,12 @@ func TestDMOrderAndExternal(t *testing.T) {
 		t.Error("External header missing")
 	}
 }
+
+func TestPrivateChannelTitle(t *testing.T) {
+	m := fakeModel(t, 100, 24)
+	m.convs["C3"].LastRead, m.convs["C3"].Latest = "1.0", "2.0"
+	m.open(unreadsID)
+	if v := dump(t, m); !strings.Contains(v, lockIcon+" secret-project") || strings.Contains(v, "⊘") {
+		t.Errorf("Unreads should show the lock icon for private channels")
+	}
+}

@@ -100,7 +100,7 @@ func (m *Model) convTitle(c *backend.Conversation) string {
 	case backend.KindChannel:
 		return "# " + c.Name
 	case backend.KindPrivate:
-		return "⊘ " + c.Name
+		return lockIcon + " " + c.Name
 	default:
 		return m.convLabel(c)
 	}
