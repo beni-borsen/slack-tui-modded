@@ -173,42 +173,39 @@ func TestStatusAndPresenceShown(t *testing.T) {
 			t.Errorf("status bar lacks %q: %q", want, status)
 		}
 	}
-	if !strings.Contains(v, "Anna Jensen 🏠") {
-		t.Errorf("Anna's status emoji missing from the sidebar")
+	// Anna is active: a green dot (colour 114) after her name, then her
+	// status. Bob is away: no dot. Icons keep the row's colour.
+	if !strings.Contains(v, "Anna Jensen ● 🏠") {
+		t.Errorf("Anna's dot and status emoji missing from the sidebar")
 	}
-	if strings.Contains(v, "🚗") {
-		t.Errorf("Bob's expired status still shown")
+	if strings.Contains(v, "Bob ●") || strings.Contains(v, "🚗") {
+		t.Errorf("Bob is away and his status expired: no dot, no emoji")
 	}
-	// Anna is active: her icon is green (colour 114).
-	green := 0
+	rows := 0
 	for _, l := range strings.Split(raw, "\n") {
-		if strings.Contains(ansi.Strip(l), userIcon+" Anna Jensen") {
-			if !strings.Contains(l, "38;5;114m"+userIcon) {
-				t.Errorf("Anna's icon not green: %q", l)
+		plain := ansi.Strip(l)
+		switch {
+		case strings.Contains(plain, userIcon+" Anna Jensen"):
+			if !strings.Contains(l, "38;5;114m ●") {
+				t.Errorf("Anna's dot not green: %q", l)
 			}
-			green++
+			rows++
+		case strings.Contains(plain, userIcon+" Bob"):
+			rows++
+		default:
+			continue
+		}
+		if strings.Contains(l, "38;5;114m"+userIcon) || strings.Contains(l, "38;5;215m"+userIcon) {
+			t.Errorf("icon still coloured by presence: %q", l)
 		}
 	}
-	if green == 0 {
-		t.Error("Anna's DM row not found")
-	}
-	// Bob is away: amber (colour 215).
-	amber := 0
-	for _, l := range strings.Split(raw, "\n") {
-		if strings.Contains(ansi.Strip(l), userIcon+" Bob") {
-			if !strings.Contains(l, "38;5;215m"+userIcon) {
-				t.Errorf("Bob's icon not amber: %q", l)
-			}
-			amber++
-		}
-	}
-	if amber == 0 {
-		t.Error("Bob's DM row not found")
+	if rows != 2 {
+		t.Errorf("found %d of Anna's and Bob's rows", rows)
 	}
 
 	m.open("D1")
 	v = dump(t, m)
-	if !strings.Contains(v, "Anna Jensen  active  🏠 WFH") {
+	if !strings.Contains(v, "Anna Jensen ●  🏠 WFH") {
 		t.Errorf("DM header lacks presence and status")
 	}
 

@@ -37,6 +37,7 @@ const (
 	groupIcon   = "\uedca"
 	lockIcon    = "\uf456" // private channels
 	dndIcon     = "\uf186" // moon, for Do Not Disturb
+	onlineDot   = "●"      // after the names of people who are active
 )
 
 const pageSize = 50

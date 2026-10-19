@@ -267,8 +267,7 @@ func (m *Model) sideRow(it sideItem, cursor bool, width int) string {
 	}
 
 	var icon, label, status string
-	unread, badge := false, 0
-	active, known := false, false // presence; known once polled
+	unread, badge, active := false, 0, false
 	if it.id == unreadsID {
 		n := m.unreadCount()
 		icon, label, unread = unreadsIcon, "Unreads", n > 0
@@ -293,7 +292,7 @@ func (m *Model) sideRow(it sideItem, cursor bool, width int) string {
 		label = m.convLabel(c)
 		unread, badge = c.Unread(), c.Mentions
 		if c.Kind == backend.KindDM {
-			active, known = m.presence[c.UserID]
+			active = m.presence[c.UserID]
 			if s := m.statusEmoji(c.UserID); s != "" {
 				status = " " + s
 			}
@@ -308,26 +307,25 @@ func (m *Model) sideRow(it sideItem, cursor bool, width int) string {
 	if badge > 0 {
 		badgeStr = sBadge.Render(fmt.Sprint(badge))
 	}
-	room := width - 4 - lipgloss.Width(badgeStr) - ansi.StringWidth(status)
+	dot := ""
+	if active {
+		dot = " " + onlineDot
+	}
+	room := width - 4 - lipgloss.Width(badgeStr) - ansi.StringWidth(dot) - ansi.StringWidth(status)
 	label = ansi.Truncate(label, room, "…")
 
 	style := sDim
 	if unread {
 		style = sUnread
 	}
-	// Presence colours the icon: green while active, amber when away;
-	// people not polled yet keep the row's colour.
-	iconStyle := style
 	if it.id == m.current {
-		style, iconStyle = sActive, sActive
+		style = sActive
 	}
-	switch {
-	case active:
-		iconStyle = iconStyle.Foreground(cOK)
-	case known:
-		iconStyle = iconStyle.Foreground(cWarn)
+	text := style.Render(icon + " " + label)
+	if dot != "" {
+		// A green dot after the name for people who are active.
+		text += style.Foreground(cOK).Render(dot)
 	}
-	text := iconStyle.Render(icon) + style.Render(" "+label)
 	pad := max(0, width-1-lipgloss.Width(text)-ansi.StringWidth(status)-lipgloss.Width(badgeStr))
 	// The status emoji is drawn as is: a custom one is an image whose
 	// placeholder cells must keep their own foreground colour, so only the

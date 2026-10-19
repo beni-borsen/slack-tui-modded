@@ -113,10 +113,8 @@ func (m *Model) renderConvPane(w, h int) string {
 	}
 	title := sTitle.Render(m.convTitle(c))
 	if c.Kind == backend.KindDM && c.UserID != m.client.SelfID {
-		if active, ok := m.presence[c.UserID]; ok && active {
-			title += "  " + sOK.Render("active")
-		} else if ok {
-			title += "  " + sWarn.Render("away")
+		if m.presence[c.UserID] {
+			title += " " + sOK.Render(onlineDot)
 		}
 		if line := m.statusLine(c.UserID); line != "" {
 			if exp := m.users[c.UserID].StatusExpires; exp > 0 {
