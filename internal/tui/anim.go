@@ -19,9 +19,10 @@ import (
 // nothing more is sent per frame.
 
 const (
-	maxAnimFrames = 200
-	maxAnimPixels = 100_000_000 // width × height × frames of the source
-	maxAnimBytes  = 16 << 20    // all scaled frames, as PNG
+	maxViewAnimBytes = 48 << 20 // the full-window viewer's frames
+	maxAnimFrames    = 200
+	maxAnimPixels    = 100_000_000 // width × height × frames of the source
+	maxAnimBytes     = 16 << 20    // all scaled frames, as PNG
 )
 
 type animFrames struct {
@@ -37,6 +38,13 @@ var errNotAnimated = errors.New("not an animated GIF")
 // maxCols×maxRows cells. errNotAnimated (or another error) means: show it
 // as a still image.
 func scaleAnim(data []byte, cw, ch, maxCols, maxRows int) (*animFrames, int, int, error) {
+	return decodeAnim(data, cw, ch, maxCols, maxRows, false, maxAnimBytes)
+}
+
+// decodeAnim is scaleAnim; grow fills the box with a smaller GIF, as the
+// viewer does. Frames are never made bigger than the GIF: the terminal
+// stretches them over the box, which keeps them small to send.
+func decodeAnim(data []byte, cw, ch, maxCols, maxRows int, grow bool, maxBytes int) (*animFrames, int, int, error) {
 	cfg, err := gif.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
 		return nil, 0, 0, err
@@ -57,11 +65,19 @@ func scaleAnim(data []byte, cw, ch, maxCols, maxRows int) (*animFrames, int, int
 	if w <= 0 || h <= 0 || n > maxAnimFrames || w*h*n > maxAnimPixels {
 		return nil, 0, 0, errors.New("animation too large")
 	}
-	cols, rows := fitCells(w, h, cw, ch, maxCols, maxRows)
+	gw, gh := w, h
+	if grow {
+		f := max(float64(maxCols*cw)/float64(w), float64(maxRows*ch)/float64(h), 1)
+		gw, gh = int(float64(w)*f), int(float64(h)*f)
+	}
+	cols, rows := fitCells(gw, gh, cw, ch, maxCols, maxRows)
 	bw, bh := cols*cw, rows*ch
 	dw, dh := bw, bw*h/w
 	if dh > bh {
 		dw, dh = bh*w/h, bh
+	}
+	if dw > w {
+		dw, dh = w, h
 	}
 	canvas := image.NewRGBA(image.Rect(0, 0, w, h))
 	out := &animFrames{}
@@ -85,7 +101,7 @@ func scaleAnim(data []byte, cw, ch, maxCols, maxRows int) (*animFrames, int, int
 		if err := enc.Encode(&buf, dst); err != nil {
 			return nil, 0, 0, err
 		}
-		if total += buf.Len(); total > maxAnimBytes {
+		if total += buf.Len(); total > maxBytes {
 			return nil, 0, 0, errors.New("animation too large")
 		}
 		out.frames = append(out.frames, buf.Bytes())
@@ -170,6 +186,21 @@ func (m *Model) stepAnims(now time.Time) tea.Cmd {
 			st.next = now.Add(a.delays[st.frame])
 		}
 		next = min(next, st.next.Sub(now))
+	}
+	if v := m.viewer; v != nil {
+		if st := v.cache[v.items[v.idx].file.ID]; st != nil && st.anim != nil {
+			any = true
+			if st.ready && v.shown == v.items[v.idx].file.ID {
+				if st.next.IsZero() {
+					st.next = now.Add(st.anim.delays[st.frame])
+				}
+				if !now.Before(st.next) {
+					st.frame = (st.frame + 1) % len(st.anim.frames)
+					st.next = now.Add(st.anim.delays[st.frame])
+				}
+				next = min(next, st.next.Sub(now))
+			}
+		}
 	}
 	if !any {
 		m.animating = false

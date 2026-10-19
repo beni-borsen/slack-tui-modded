@@ -30,14 +30,21 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.FocusMsg:
+		var cmd tea.Cmd
 		if m.viewer != nil {
 			m.viewer.shown = "" // tmux may have dropped it while we were hidden
-			m.showViewer()
+			cmd = m.showViewer()
 		}
-		return m, m.resendImages()
+		return m, tea.Batch(cmd, m.resendImages())
 
 	case viewLoadedMsg:
-		m.viewerLoaded(msg)
+		return m, m.viewerLoaded(msg)
+
+	case viewFramesMsg:
+		if msg.err == nil && msg.st.ids != nil {
+			msg.st.ready = true
+			return m, m.startAnims()
+		}
 		return m, nil
 
 	case imageMsg:

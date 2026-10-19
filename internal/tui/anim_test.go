@@ -8,9 +8,11 @@ import (
 	"image/gif"
 	"image/png"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/magnusdalkvist/slack-tui/internal/backend"
 	"github.com/magnusdalkvist/slack-tui/internal/kitty"
 )
 
@@ -111,5 +113,48 @@ func TestStepAnims(t *testing.T) {
 	delete(m.images, "F1")
 	if m.stepAnims(now) != nil || m.animating {
 		t.Error("the tick should stop with nothing to animate")
+	}
+}
+
+func TestViewerAnim(t *testing.T) {
+	m := chanWithMessages(t)
+	tty, _ := os.CreateTemp(t.TempDir(), "tty")
+	m.SetGraphics(kitty.NewWriter(tty, false), "")
+	m.cellW, m.cellH = 8, 16
+	dir := filepath.Join(cacheDir(), "files")
+	os.MkdirAll(dir, 0o700)
+	os.WriteFile(filepath.Join(dir, "G1-party.gif"), testGIF(t, 3, 0), 0o600)
+	gifFile := backend.File{ID: "G1", Name: "party.gif", Mimetype: "image/gif", URL: "https://files.slack.com/G1", Anim: "https://files.slack.com/G1"}
+	m.update(historyMsg{id: "C2", msgs: []backend.Message{{TS: "100.000001", User: "U1", Files: []backend.File{gifFile}}}})
+	m.focus = fMessages
+
+	_, cmd := m.Update(key("v"))
+	run(m, cmd) // loads it and shows the first frame
+	v := m.viewer
+	st := v.cache["G1"]
+	if st == nil || st.anim == nil || len(st.ids) != 3 || st.ready {
+		t.Fatalf("the viewer should load the GIF's frames: %+v", st)
+	}
+	if v.shownID(st) != st.ids[0] {
+		t.Error("the first frame shows while the rest are sent")
+	}
+	st.ids, v.shown = nil, "" // show it again, keeping the command that sends the rest
+	run(m, m.showViewer())
+	if !st.ready {
+		t.Fatal("frames not marked sent")
+	}
+	if st.cols*8 <= 40 {
+		t.Errorf("a small GIF should fill the window: %d cols", st.cols)
+	}
+	now := time.Now()
+	m.stepAnims(now)
+	m.stepAnims(now.Add(60 * time.Millisecond))
+	if st.frame != 1 || v.shownID(st) != st.ids[1] {
+		t.Errorf("frame %d", st.frame)
+	}
+	ids := st.ids
+	m.Update(key("esc"))
+	if m.viewer != nil || st.ids != nil || len(ids) != 3 {
+		t.Error("closing should free the frames")
 	}
 }
