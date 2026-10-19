@@ -268,16 +268,36 @@ func parseUntil(s string, now time.Time) (time.Time, bool) {
 		y, mo, d := now.Date()
 		return time.Date(y, mo, d+1, 0, 0, 0, 0, now.Location()), true
 	}
-	g := reUntilClock.FindStringSubmatch(s)
-	if g == nil {
+	h, mi, bare, ok := parseClock(s)
+	if !ok {
 		return time.Time{}, false
 	}
-	h, _ := strconv.Atoi(g[1])
-	mi, _ := strconv.Atoi(g[2])
+	y, mo, d := now.Date()
+	t := time.Date(y, mo, d, h, mi, 0, 0, now.Location())
+	// A bare small hour already past ("until 3" at 10:00) means the
+	// afternoon; with minutes ("until 8:00") it is taken as written.
+	if !t.After(now) && bare && h < 12 && t.Add(12*time.Hour).After(now) {
+		t = t.Add(12 * time.Hour)
+	}
+	if !t.After(now) {
+		t = t.AddDate(0, 0, 1)
+	}
+	return t, true
+}
+
+// parseClock reads 15, 15:30, 15.30, 1530, 3pm or 3:30pm. bare is a lone
+// hour without minutes or am/pm, which callers may read as the afternoon.
+func parseClock(s string) (h, mi int, bare, ok bool) {
+	g := reUntilClock.FindStringSubmatch(strings.ToLower(s))
+	if g == nil {
+		return 0, 0, false, false
+	}
+	h, _ = strconv.Atoi(g[1])
+	mi, _ = strconv.Atoi(g[2])
 	switch g[3] {
 	case "am", "pm":
 		if h < 1 || h > 12 {
-			return time.Time{}, false
+			return 0, 0, false, false
 		}
 		h %= 12
 		if g[3] == "pm" {
@@ -285,19 +305,9 @@ func parseUntil(s string, now time.Time) (time.Time, bool) {
 		}
 	}
 	if h > 23 || mi > 59 {
-		return time.Time{}, false
+		return 0, 0, false, false
 	}
-	y, mo, d := now.Date()
-	t := time.Date(y, mo, d, h, mi, 0, 0, now.Location())
-	// A bare small hour already past ("until 3" at 10:00) means the
-	// afternoon; with minutes ("until 8:00") it is taken as written.
-	if !t.After(now) && g[2] == "" && g[3] == "" && h < 12 && t.Add(12*time.Hour).After(now) {
-		t = t.Add(12 * time.Hour)
-	}
-	if !t.After(now) {
-		t = t.AddDate(0, 0, 1)
-	}
-	return t, true
+	return h, mi, g[2] == "" && g[3] == "", true
 }
 
 // isUntil accepts "until" and its common misspellings and short forms.

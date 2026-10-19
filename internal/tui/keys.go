@@ -42,6 +42,9 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 		}
 		return m.setStatus("cancelled", false)
 	}
+	if m.sched != nil {
+		return m.schedKey(k)
+	}
 	if m.help {
 		m.help = false
 		return nil
@@ -352,6 +355,8 @@ func (m *Model) insertKey(k tea.KeyMsg) tea.Cmd {
 		return m.paste(string(k.Runes), false)
 	case k.Type == tea.KeyCtrlV && m.editing == nil:
 		return m.paste("", true)
+	case k.Type == tea.KeyCtrlS && m.editing == nil:
+		return m.laterFromInsert()
 	case k.Type == tea.KeyCtrlB:
 		m.toggleMark('*')
 		return nil

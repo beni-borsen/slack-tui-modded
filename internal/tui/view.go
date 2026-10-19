@@ -47,6 +47,8 @@ func (m *Model) View() string {
 		main = m.renderSearch(mainW, h)
 	case m.pins != nil:
 		main = m.renderPins(mainW, h)
+	case m.sched != nil:
+		main = m.renderScheduled(mainW, h)
 	case m.current == unreadsID:
 		main = m.renderUnreads(mainW, h)
 	case m.thread != nil && mainW >= 80:
@@ -124,6 +126,9 @@ func (m *Model) renderConvPane(w, h int) string {
 			}
 			title += "  " + line
 		}
+	}
+	if n := m.scheduledIn(c.ID); n > 0 {
+		title += "  " + sWarn.Render(fmt.Sprintf("%s %d scheduled", schedIcon, n))
 	}
 	if c.Topic != "" {
 		title += "  " + sTopic.Render(strings.ReplaceAll(render.Mrkdwn(c.Topic, m, mdStyles), "\n", " "))
@@ -327,6 +332,7 @@ func (m *Model) renderHelp() string {
 		{"alt+enter ctrl+j", "new line"},
 		{"ctrl+v  (insert)", "attach clipboard image (again for more)"},
 		{"ctrl+b alt+i  (insert)", "bold / italic the word at the cursor"},
+		{"ctrl+s  (insert)", "send later: :later 30m / 15:30 / tomorrow / fri 9"},
 		{":ta @an #de  (insert)", "complete emoji, people, channels"},
 		{"esc", "back to normal mode"},
 		{"/", "search messages (from:@x in:#y after:date); enter goes there"},

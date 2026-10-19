@@ -83,6 +83,7 @@ expires = "until tomorrow"
 | `enter` / `alt+enter`, `ctrl+j` | send / new line (insert mode) |
 | `ctrl+b` / `alt+i` (insert mode) | bold / italic the word at the cursor (again to undo; with no word, starts a `**` pair). `[label](https://…)` is sent as a link |
 | paste an image, `ctrl+v` | attach the clipboard image (repeat for up to 10 in one message); `enter` uploads it with the typed text, `ctrl+x` drops it (insert mode) |
+| `ctrl+s` (insert mode) | send later: opens `:later ` for a time (below) |
 | `:ta` `@an` `#de` (insert mode) | complete emoji, people (also @here/@channel/@everyone) and channels: `tab`/`enter` inserts, `↑` `↓` choose, `esc` closes. People and channels are sent as real mentions |
 | `esc` | back to normal mode |
 | `/` | search messages: Slack's own query syntax (`from:@anna in:#dev after:2026-01-01 "exact words"`); typing `@`, `#` or a name after `from:`/`in:` suggests people and channels (Slack's search matches handles, not display names, so pick from the list); `enter` goes to the message (its thread for replies), `o` opens it in Slack |
@@ -108,6 +109,8 @@ expires = "until tomorrow"
 | `:status` / `:status clear` | show / clear your status |
 | `:status <template> [expiry]` | a status from `[[status]]` in the config; after `:status ` the templates are suggested |
 | `:dnd 30m` / `:dnd until 17:00` / `:dnd off` | pause notifications (Do Not Disturb), or turn them back on; `:dnd` shows the state |
+| `:later 30m` / `:later 15:30` / `:later tomorrow 8:30` / `:later fri` | schedule the message you are writing (also `2h`, `3pm`, `today 17`, a weekday; a day alone means 9:00, a bare hour below 7 the afternoon). Text only — Slack can't schedule files |
+| `:scheduled` | every scheduled message: `enter` goes to its conversation, `e` takes it back into the composer, `d` cancels it, `R` reloads. The conversation header counts what is waiting there |
 | `:away` / `:back` | show as away / let Slack decide again |
 
 A unique prefix is enough (`:st`, `:d 1h`). Your DND, away state and status sit in the status bar.

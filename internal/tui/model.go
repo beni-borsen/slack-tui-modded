@@ -38,6 +38,7 @@ const (
 	lockIcon    = "\uf456" // private channels
 	dndIcon     = "\uf186" // moon, for Do Not Disturb
 	pinIcon     = "\uf435" // after the time of pinned messages
+	schedIcon   = "\uf017" // clock, for scheduled messages
 	onlineDot   = "●"      // after the names of people who are active
 )
 
@@ -104,6 +105,7 @@ type Model struct {
 	switcher *switcher
 	search   *searchState // `/`; nil until first used
 	pins     *pinsState   // `P`, while open
+	sched    *schedState  // `:scheduled`, while open
 	cmd      *cmdLine     // `:` command line, while open
 	cmdHist  []string     // commands run this session
 	jump     *jumpState   // search result being loaded into view
@@ -146,6 +148,9 @@ type Model struct {
 	allEmoji       []string
 	allEmojiCustom int // len(m.emoji) when allEmoji was built
 
+	scheduled   []backend.Scheduled // the user's scheduled messages, soonest first
+	schedThread map[string]string   // scheduled ID → thread, for those scheduled here (Slack's list leaves it out)
+
 	dnd      backend.DND     // the user's own Do Not Disturb
 	dndSeq   int             // ignores DND refresh ticks booked before a change
 	away     bool            // the user set themselves away
@@ -184,6 +189,7 @@ func New(ctx context.Context, client *backend.Client, cfg config.Config) *Model 
 		emoji:         map[string]string{},
 		images:        map[string]*imgState{},
 		composeTokens: map[string]string{},
+		schedThread:   map[string]string{},
 		emojiImgs:     map[string]*imgState{},
 		dirty:         map[string]*msgList{},
 		saved:         map[string]uint64{},

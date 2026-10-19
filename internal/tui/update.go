@@ -71,6 +71,15 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case scheduledMsg:
+		return m, m.scheduledResult(msg)
+
+	case scheduledListMsg:
+		return m, m.scheduledListResult(msg)
+
+	case unscheduledMsg:
+		return m, m.unscheduledResult(msg)
+
 	case pinsMsg:
 		m.pinsResult(msg)
 		return m, nil
@@ -174,7 +183,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// goroutine, so it runs under the program (and not after a test).
 		users, convs := msg.users, msg.convs
 		save := func() tea.Msg { names.SaveTo(names.Path(), users, convs); return nil }
-		return m, tea.Batch(cmd, m.refreshLater(), save, m.loadMe(), m.pollPresence())
+		return m, tea.Batch(cmd, m.refreshLater(), save, m.loadMe(), m.pollPresence(), m.loadScheduled())
 
 	case convsMsg:
 		if msg.err != nil {
@@ -436,7 +445,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			ids = append(ids, c.ID)
 		}
 		m.loadInfos(ids)
-		return m, m.refreshLater()
+		return m, tea.Batch(m.refreshLater(), m.loadScheduled())
 
 	case statusClear:
 		if msg.seq == m.statusSeq {
