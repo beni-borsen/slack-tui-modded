@@ -93,6 +93,14 @@ Opened files are cached in `~/.cache/slack-tui/files/`.
 Custom emoji are drawn as images too, two cells wide, fetched from Slack's public emoji CDN
 (`*.slack-edge.com`, no token sent) and cached in `~/.cache/slack-tui/emoji/`.
 
+## Cache
+
+What the client last saw (people, conversations and read markers, custom emoji, the newest 200
+messages of each conversation and the threads you opened) is kept in
+`~/.cache/slack-tui/slack-<team>.db`, so the next start draws at once and catches up in the
+background. Without a connection it keeps showing the cache and retries every 30 seconds.
+`slack logout` deletes it along with the tokens.
+
 ## Limits of the official API
 
 - No unread-count endpoint: on start the client calls `conversations.info` once per conversation

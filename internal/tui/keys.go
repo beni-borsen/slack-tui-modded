@@ -241,7 +241,7 @@ func (m *Model) openThread(parent backend.Message) tea.Cmd {
 	}
 	m.thread = &threadState{conv: m.current, ts: ts, list: msgList{sel: -1, loading: true, msgs: []backend.Message{parent}}}
 	m.focus = fThread
-	return m.loadReplies(m.current, ts)
+	return tea.Batch(m.loadThreadCache(m.current, ts), m.loadReplies(m.current, ts))
 }
 
 func (m *Model) unreadsKey(k tea.KeyMsg) tea.Cmd {

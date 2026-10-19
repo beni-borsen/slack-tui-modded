@@ -34,6 +34,8 @@ type Conversation struct {
 	InfoLoaded bool
 	// External is a Slack Connect conversation, shared with another organisation.
 	External bool
+	// Cached is set while the markers come from the last session's cache.
+	Cached bool `json:"-"`
 }
 
 // Unread reports whether there are messages newer than the read marker.

@@ -14,6 +14,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/magnusdalkvist/slack-tui/internal/backend"
+	"github.com/magnusdalkvist/slack-tui/internal/cache"
 	"github.com/magnusdalkvist/slack-tui/internal/config"
 	"github.com/magnusdalkvist/slack-tui/internal/kitty"
 )
@@ -56,6 +57,8 @@ type threadState struct {
 	conv string
 	ts   string
 	list msgList
+	// cached: replies shown from the cache, replaced by the fetched thread.
+	cached map[string]bool
 }
 
 type unreadsState struct {
@@ -99,6 +102,7 @@ type Model struct {
 	help     bool
 
 	booted      bool
+	fromCache   bool // drawn from the cache; the API hasn't answered yet
 	bootErr     error
 	conn        string
 	infoPending int
@@ -133,6 +137,10 @@ type Model struct {
 	dismissed      string // query whose list was closed with esc
 	allEmoji       []string
 	allEmojiCustom int // len(m.emoji) when allEmoji was built
+
+	cache *cache.Cache        // nil when caching is off
+	dirty map[string]*msgList // lists to save at the next flush, by cache key
+	saved map[string]uint64   // hash of what was last saved, by kind
 }
 
 func New(ctx context.Context, client *backend.Client, cfg config.Config) *Model {
@@ -164,6 +172,8 @@ func New(ctx context.Context, client *backend.Client, cfg config.Config) *Model 
 		images:        map[string]*imgState{},
 		composeTokens: map[string]string{},
 		emojiImgs:     map[string]*imgState{},
+		dirty:         map[string]*msgList{},
+		saved:         map[string]uint64{},
 		imgSem:        make(chan struct{}, 3),
 		current:       unreadsID,
 		focus:         fSidebar,
@@ -233,7 +243,7 @@ func (m *Model) Init() tea.Cmd {
 	for _, name := range config.LoadState().Folded {
 		m.folded[name] = true
 	}
-	return tea.Batch(m.boot(), m.loadEmoji(), m.waitEvent(), textarea.Blink)
+	return tea.Batch(m.loadCache(), m.boot(), m.loadEmoji(), m.waitEvent(), m.flushLater(), textarea.Blink)
 }
 
 func (m *Model) waitEvent() tea.Cmd {
@@ -427,7 +437,7 @@ func (m *Model) mergeConv(c backend.Conversation) {
 	// Keep the name/kind from the list, and never move markers backwards:
 	// live events may know about newer messages than the API call did.
 	if c.InfoLoaded {
-		if backend.TSLess(old.LastRead, c.LastRead) || !old.InfoLoaded {
+		if backend.TSLess(old.LastRead, c.LastRead) || !old.InfoLoaded || old.Cached {
 			old.LastRead = c.LastRead
 		}
 		if backend.TSLess(old.Latest, c.Latest) {
@@ -439,7 +449,7 @@ func (m *Model) mergeConv(c backend.Conversation) {
 		if !old.Unread() {
 			old.Mentions = 0
 		}
-		old.InfoLoaded = true
+		old.InfoLoaded, old.Cached = true, false
 	}
 	if c.Topic != "" {
 		old.Topic = c.Topic

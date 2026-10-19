@@ -24,6 +24,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/magnusdalkvist/slack-tui/internal/backend"
+	"github.com/magnusdalkvist/slack-tui/internal/cache"
 	"github.com/magnusdalkvist/slack-tui/internal/kitty"
 )
 
@@ -325,10 +326,4 @@ func (m *Model) openURL(url string) tea.Cmd {
 	}
 }
 
-func cacheDir() string {
-	if d := os.Getenv("XDG_CACHE_HOME"); d != "" {
-		return filepath.Join(d, "slack-tui")
-	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".cache", "slack-tui")
-}
+func cacheDir() string { return cache.Dir() }

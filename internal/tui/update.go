@@ -94,13 +94,50 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m, m.handleKey(msg)
 
+	case cacheMsg:
+		if msg.err != nil {
+			return m, m.setStatus("cache: "+msg.err.Error(), true)
+		}
+		m.applyCache(msg.snap)
+		return m, nil
+
+	case threadCacheMsg:
+		m.applyThreadCache(msg)
+		return m, nil
+
+	case flushTick:
+		m.Flush()
+		return m, m.flushLater()
+
+	case bootRetry:
+		return m, m.boot()
+
 	case bootMsg:
 		if msg.users == nil && msg.err != nil {
+			if m.fromCache {
+				// Offline, or Slack is down: keep showing the cache and try again.
+				retry := tea.Tick(30*time.Second, func(time.Time) tea.Msg { return bootRetry{} })
+				return m, tea.Batch(retry, m.setStatus("offline, showing cached messages: "+msg.err.Error(), true))
+			}
 			m.bootErr = msg.err
 			return m, nil
 		}
 		for _, u := range msg.users {
 			m.users[u.ID] = u
+		}
+		if m.fromCache {
+			// Forget cached conversations the user has since left.
+			live := map[string]bool{}
+			for _, c := range msg.convs {
+				live[c.ID] = true
+			}
+			for id := range m.convs {
+				if !live[id] {
+					delete(m.convs, id)
+					delete(m.lists, id)
+				}
+			}
+			m.fromCache = false
 		}
 		for _, c := range msg.convs {
 			m.mergeConv(c)
@@ -177,6 +214,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			l.msgs, msg.hasMore = mergeFresh(l.msgs, msg.msgs, l.hasMore, msg.hasMore)
 		}
 		l.hasMore, l.loaded = msg.hasMore, true
+		m.touch(msg.id)
 		if c := m.convs[msg.id]; c != nil && len(l.msgs) > 0 {
 			for i := len(l.msgs) - 1; i >= 0; i-- {
 				if !l.msgs[i].IsReply() {
@@ -197,10 +235,19 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			return m, m.setStatus(msg.err.Error(), true)
 		}
-		for _, x := range m.thread.list.msgs {
-			msg.msgs = upsert(msg.msgs, x)
+		// The fetched thread is complete; keep only live replies newer than it
+		// (cached ones it no longer has were deleted).
+		if n := len(msg.msgs); n > 0 {
+			for _, x := range m.thread.list.msgs {
+				if backend.TSLess(msg.msgs[n-1].TS, x.TS) && !m.thread.cached[x.TS] {
+					msg.msgs = upsert(msg.msgs, x)
+				}
+			}
+		} else {
+			msg.msgs = m.thread.list.msgs
 		}
 		m.thread.list.msgs, m.thread.list.loaded = msg.msgs, true
+		m.touch(msg.id)
 		return m, nil
 
 	case sinceMsg:
@@ -286,6 +333,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.setStatus("custom emoji: "+msg.err.Error(), true)
 		}
 		m.emoji = msg.emoji
+		if m.cache != nil {
+			m.cache.SaveEmoji(msg.emoji)
+		}
 		return m, nil
 
 	case errMsg:
@@ -356,6 +406,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // applyMessage adds a message to every view that shows it.
 func (m *Model) applyMessage(convID string, msg backend.Message) {
+	defer m.touch(convID)
 	if msg.IsReply() || msg.SubType == "thread_broadcast" {
 		if t := m.thread; t != nil && t.conv == convID && t.ts == msg.ThreadTS {
 			t.list.msgs = upsert(t.list.msgs, msg)
@@ -431,6 +482,7 @@ func (m *Model) onMessage(ev backend.EvMessage) tea.Cmd {
 }
 
 func (m *Model) editMessage(convID string, msg backend.Message) {
+	m.touch(convID)
 	replace := func(msgs []backend.Message) {
 		for i := range msgs {
 			if msgs[i].TS == msg.TS {
@@ -463,6 +515,7 @@ func (m *Model) editMessage(convID string, msg backend.Message) {
 }
 
 func (m *Model) applyReaction(ev backend.EvReaction) {
+	m.touch(ev.Channel)
 	apply := func(msgs []backend.Message) {
 		for i := range msgs {
 			if msgs[i].TS != ev.TS {
@@ -519,6 +572,15 @@ func mergeFresh(local, fresh []backend.Message, localMore, freshMore bool) ([]ba
 		return local, localMore
 	}
 	first, last := fresh[0].TS, fresh[len(fresh)-1].TS
+	// Older messages can only be kept when they connect to the page: with
+	// more history behind it and no message in common (say, a cache from
+	// days ago), there may be a gap in between. With no more history behind
+	// it, older ones were deleted.
+	if !freshMore || !slices.ContainsFunc(local, func(x backend.Message) bool {
+		return !backend.TSLess(x.TS, first) && !backend.TSLess(last, x.TS)
+	}) {
+		local = slices.DeleteFunc(slices.Clone(local), func(x backend.Message) bool { return backend.TSLess(x.TS, first) })
+	}
 	var out []backend.Message
 	keptOlder := false
 	for _, x := range local {
