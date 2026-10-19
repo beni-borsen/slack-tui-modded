@@ -2,12 +2,14 @@ package tui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/magnusdalkvist/slack-tui/internal/backend"
+	"github.com/magnusdalkvist/slack-tui/internal/kitty"
 	"github.com/magnusdalkvist/slack-tui/internal/render"
 )
 
@@ -35,6 +37,12 @@ const (
 	tabFiles = iota
 	tabLinks
 )
+
+// Image previews in the Files tab: most pasted images are all called
+// image.png, so the picture is what tells them apart.
+const thumbCols, thumbRows = 24, 6
+
+func thumbKey(fileID string) string { return "thumb/" + fileID }
 
 // linkRow is one link; a message with several links gives several rows.
 type linkRow struct {
@@ -90,19 +98,61 @@ func (m *Model) loadSharedLinks(page int) tea.Cmd {
 	}
 }
 
-func (m *Model) sharedFilesResult(msg convFilesMsg) {
+func (m *Model) sharedFilesResult(msg convFilesMsg) tea.Cmd {
 	s := m.shared
 	if s == nil || s.conv != msg.conv {
-		return
+		return nil
 	}
 	t := &s.tabs[tabFiles]
 	t.loading = false
 	if msg.err != nil {
 		t.err = msg.err.Error()
-		return
+		return nil
 	}
 	s.files = append(s.files, msg.res.Files...)
 	t.page, t.pages, t.total = msg.res.Page, msg.res.Pages, msg.res.Total
+	return m.scanThumbs()
+}
+
+// scanThumbs fetches previews for the images around the cursor.
+func (m *Model) scanThumbs() tea.Cmd {
+	s := m.shared
+	if m.gfx == nil || s == nil || s.tab != tabFiles {
+		return nil
+	}
+	sel := s.tabs[tabFiles].sel
+	var cmds []tea.Cmd
+	for i := max(sel-5, 0); i < min(sel+15, len(s.files)); i++ {
+		f := s.files[i].File
+		if !f.IsImage() || m.images[thumbKey(f.ID)] != nil {
+			continue
+		}
+		st := &imgState{id: m.newImageID()}
+		m.images[thumbKey(f.ID)] = st
+		cmds = append(cmds, m.fetchImageSized(thumbKey(f.ID), f, st.id, thumbCols, thumbRows))
+	}
+	return tea.Batch(cmds...)
+}
+
+// viewSharedImages opens the full-window viewer on the Files tab's images,
+// starting at the selected one (or the next image after it).
+func (m *Model) viewSharedImages() tea.Cmd {
+	s := m.shared
+	l := &msgList{sel: -1}
+	start := 0
+	for i, f := range s.files {
+		if !f.IsImage() {
+			continue
+		}
+		if i < s.tabs[tabFiles].sel {
+			start++
+		}
+		l.msgs = append(l.msgs, backend.Message{TS: strconv.Itoa(i), Files: []backend.File{f.File}})
+	}
+	if len(l.msgs) == 0 {
+		return m.setStatus("no images here", false)
+	}
+	return m.openViewer(l, min(start, len(l.msgs)-1))
 }
 
 func (m *Model) sharedLinksResult(msg convLinksMsg) {
@@ -151,6 +201,11 @@ func (m *Model) sharedKey(k tea.KeyMsg) tea.Cmd {
 		return nil
 	case "tab", "shift+tab", "h", "l", "left", "right":
 		s.tab = 1 - s.tab
+		return m.scanThumbs()
+	case "v":
+		if s.tab == tabFiles {
+			return m.viewSharedImages()
+		}
 		return nil
 	case "j", "down":
 		t.sel++
@@ -199,14 +254,15 @@ func (m *Model) sharedKey(k tea.KeyMsg) tea.Cmd {
 		return m.copyText(s.files[min(t.sel, n-1)].Permalink)
 	}
 	t.sel = min(max(t.sel, 0), max(n-1, 0))
+	thumbs := m.scanThumbs()
 	// Near the end: fetch the next page.
 	if n > 0 && t.sel >= n-3 && t.page < t.pages && !t.loading {
 		if s.tab == tabFiles {
-			return m.loadSharedFiles(t.page + 1)
+			return tea.Batch(thumbs, m.loadSharedFiles(t.page+1))
 		}
 		return m.loadSharedLinks(t.page + 1)
 	}
-	return nil
+	return thumbs
 }
 
 func (m *Model) fileShareResult(msg fileShareMsg) tea.Cmd {
@@ -262,7 +318,7 @@ func (m *Model) renderShared(w, h int) string {
 	}
 	header := []string{title, " " + strings.Join(tabs, " "), rule(w, true)}
 	footer := ansi.Truncate(sFaint.Render("  ")+sKey.Render("enter")+sFaint.Render(" go to message  ")+
-		sKey.Render("o")+sFaint.Render(" open  ")+sKey.Render("c")+sFaint.Render(" copy link  ")+
+		sKey.Render("o")+sFaint.Render(" open  ")+sKey.Render("v")+sFaint.Render(" view images  ")+sKey.Render("c")+sFaint.Render(" copy link  ")+
 		sKey.Render("tab")+sFaint.Render(" files / links  ")+sKey.Render("esc")+sFaint.Render(" close"), w, "…")
 	t := &s.tabs[s.tab]
 	if t.err != "" {
@@ -304,7 +360,13 @@ func (m *Model) renderShared(w, h int) string {
 				line += sDim.Render("  " + strings.Join(info, " · "))
 			}
 			by := backend.Message{User: f.User}
-			block = []string{line, nameStyle(senderKey(by)).Render(m.senderName(by)) + " " + sTime.Render(relTime(f.Created, m.cfg.TimeFormat))}
+			block = []string{line}
+			if st := m.images[thumbKey(f.ID)]; st != nil && st.status == imgReady {
+				for _, row := range kitty.Placeholder(st.id, st.cols, st.rows) {
+					block = append(block, picture+row)
+				}
+			}
+			block = append(block, nameStyle(senderKey(by)).Render(m.senderName(by))+" "+sTime.Render(relTime(f.Created, m.cfg.TimeFormat)))
 		} else {
 			r := s.links[i]
 			label := r.link.Label
@@ -350,8 +412,15 @@ func (m *Model) renderShared(w, h int) string {
 	for len(view) < bodyH {
 		view = append(view, "")
 	}
-	for i := range view {
-		view[i] = ansi.Truncate(view[i], w, "…")
+	for i, l := range view {
+		if strings.Contains(l, picture) {
+			view[i] = strings.Replace(l, picture, "", 1) // narrower than the pane; truncating would split its cells
+		} else {
+			view[i] = ansi.Truncate(l, w, "…")
+		}
 	}
 	return strings.Join(append(append(header, view...), rule(w, false), footer), "\n")
 }
+
+// picture marks a preview row while the pane is laid out.
+const picture = "\x00pic\x00"

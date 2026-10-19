@@ -122,8 +122,13 @@ func (m *Model) scanImages() tea.Cmd {
 }
 
 func (m *Model) fetchImage(f backend.File, id uint32) tea.Cmd {
+	return m.fetchImageSized(f.ID, f, id, m.cfg.ImageMaxCols, m.cfg.ImageMaxRows)
+}
+
+// fetchImageSized fetches an image into m.images[key], fitted to at most
+// maxCols×maxRows cells.
+func (m *Model) fetchImageSized(key string, f backend.File, id uint32, maxCols, maxRows int) tea.Cmd {
 	cw, ch := m.cellW, m.cellH
-	maxCols, maxRows := m.cfg.ImageMaxCols, m.cfg.ImageMaxRows
 	return func() tea.Msg {
 		m.imgSem <- struct{}{} // a few downloads at a time
 		defer func() { <-m.imgSem }()
@@ -134,16 +139,16 @@ func (m *Model) fetchImage(f backend.File, id uint32) tea.Cmd {
 		}
 		data, err := m.client.Download(m.ctx, src, maxThumbBytes)
 		if err != nil {
-			return imageMsg{fileID: f.ID, err: err}
+			return imageMsg{fileID: key, err: err}
 		}
 		pngData, cols, rows, err := fitImage(data, cw, ch, maxCols, maxRows)
 		if err != nil {
-			return imageMsg{fileID: f.ID, err: err}
+			return imageMsg{fileID: key, err: err}
 		}
 		if err := m.gfx.Show(id, pngData, cols, rows); err != nil {
-			return imageMsg{fileID: f.ID, err: err}
+			return imageMsg{fileID: key, err: err}
 		}
-		return imageMsg{fileID: f.ID, cols: cols, rows: rows, png: pngData}
+		return imageMsg{fileID: key, cols: cols, rows: rows, png: pngData}
 	}
 }
 

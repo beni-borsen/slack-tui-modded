@@ -3,6 +3,7 @@ package backend
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/slack-go/slack"
@@ -23,7 +24,8 @@ type FilesPage struct {
 	Total, Page, Pages int
 }
 
-// ConvFiles lists the files shared in a conversation (files.list).
+// ConvFiles lists the files shared in a conversation (files.list), newest
+// first.
 func (c *Client) ConvFiles(ctx context.Context, id string, page int) (FilesPage, error) {
 	var fs []slack.File
 	var pg *slack.Paging
@@ -43,6 +45,8 @@ func (c *Client) ConvFiles(ctx context.Context, id string, page int) (FilesPage,
 			File: fromFile(f), User: f.User, Created: f.Created.Time(), Size: f.Size, Kind: f.PrettyType,
 		})
 	}
+	// Pages come newest first, but each page is oldest first (checked live).
+	slices.SortStableFunc(out.Files, func(a, b SharedFile) int { return b.Created.Compare(a.Created) })
 	return out, nil
 }
 

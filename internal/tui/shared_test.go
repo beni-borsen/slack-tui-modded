@@ -2,11 +2,13 @@ package tui
 
 import (
 	"errors"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/magnusdalkvist/slack-tui/internal/backend"
+	"github.com/magnusdalkvist/slack-tui/internal/kitty"
 )
 
 func TestSharedView(t *testing.T) {
@@ -99,5 +101,37 @@ func TestFmtSize(t *testing.T) {
 		if got := fmtSize(n); got != want {
 			t.Errorf("%d: %q, want %q", n, got, want)
 		}
+	}
+}
+
+func TestSharedThumbs(t *testing.T) {
+	m := fakeModel(t, 110, 30)
+	tty, _ := os.CreateTemp(t.TempDir(), "tty")
+	m.SetGraphics(kitty.NewWriter(tty, false), "")
+	m.open("C1")
+	m.Update(key("F"))
+	png := func(id string) backend.SharedFile {
+		return backend.SharedFile{File: backend.File{ID: id, Name: "image.png", Mimetype: "image/png", Thumb: "https://files.slack.com/" + id}, User: "U1"}
+	}
+	m.Update(convFilesMsg{conv: "C1", res: backend.FilesPage{Total: 3, Page: 1, Pages: 1, Files: []backend.SharedFile{
+		png("I1"), {File: backend.File{ID: "T1", Name: "notes.txt"}, User: "U2"}, png("I2"),
+	}}})
+	if m.images[thumbKey("I1")] == nil || m.images[thumbKey("I2")] == nil || m.images[thumbKey("T1")] != nil {
+		t.Fatal("previews should be fetched for the images only")
+	}
+	m.Update(imageMsg{fileID: thumbKey("I1"), cols: 12, rows: 3, png: []byte("x")})
+	v := dump(t, m)
+	if n := strings.Count(v, "\U0010EEEE"); n < 3*12 {
+		t.Errorf("preview not drawn: %d placeholder cells", n)
+	}
+	if strings.Contains(v, picture) {
+		t.Error("layout marker leaked")
+	}
+
+	// v opens the viewer on the images, from the selected one on.
+	m.Update(key("j")) // notes.txt: the next image is I2
+	m.Update(key("v"))
+	if m.viewer == nil || len(m.viewer.items) != 2 || m.viewer.items[m.viewer.idx].file.ID != "I2" {
+		t.Fatalf("viewer %+v", m.viewer)
 	}
 }

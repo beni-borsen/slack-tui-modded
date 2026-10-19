@@ -96,8 +96,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.invitedResult(msg)
 
 	case convFilesMsg:
-		m.sharedFilesResult(msg)
-		return m, nil
+		return m, m.sharedFilesResult(msg)
 
 	case convLinksMsg:
 		m.sharedLinksResult(msg)

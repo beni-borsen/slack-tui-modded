@@ -97,7 +97,7 @@ expires = "until tomorrow"
 | `D` | delete your message (asks y/n) |
 | `p` | pin / unpin the message |
 | `P` | the conversation's bookmarks and pinned messages: `enter` opens a bookmark or goes to the message, `o` opens it in Slack, `p` unpins, `a` / `e` / `d` add, edit or remove a bookmark (also `:pins`) |
-| `F` | files and links shared in the conversation, on two tabs (`tab` switches): `enter` goes to the message that shared it, `o` opens it, `c` copies its link. Reaches back through all history (also `:files`) |
+| `F` | files and links shared in the conversation, on two tabs (`tab` switches): `enter` goes to the message that shared it, `o` opens it, `c` copies its link; images get a preview, `v` views them full-window. Newest first, reaching back through all history (also `:files`) |
 | `o` | open the selected message's file (images in `image_viewer`) or link (browser); with several, a chooser: `1`-`9` or `enter` opens |
 | `v` | full-window image viewer from the selected message: `←` `→` step through every image in the conversation or thread, `o` opens externally, `esc` closes |
 | `x` | close thread |
