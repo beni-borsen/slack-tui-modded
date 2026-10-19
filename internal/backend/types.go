@@ -92,6 +92,8 @@ type File struct {
 	// Thumb is the best thumbnail Slack made (images only); W/H are the
 	// original's pixel size.
 	Thumb string
+	// Anim is an animated version for GIFs (thumbnails are still frames).
+	Anim string
 	W, H  int
 }
 
@@ -199,9 +201,13 @@ func fromFile(f slack.File) File {
 	if thumb == "" {
 		thumb = f.Thumb360
 	}
+	anim := f.Thumb360Gif
+	if anim == "" && f.Mimetype == "image/gif" {
+		anim = f.URLPrivate
+	}
 	return File{
 		ID: f.ID, Name: f.Name, Title: f.Title, Mimetype: f.Mimetype, URL: f.URLPrivate, Permalink: f.Permalink,
-		Thumb: thumb, W: f.OriginalW, H: f.OriginalH,
+		Thumb: thumb, Anim: anim, W: f.OriginalW, H: f.OriginalH,
 	}
 }
 

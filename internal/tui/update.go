@@ -50,7 +50,18 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		st.status, st.cols, st.rows, st.png = imgReady, msg.cols, msg.rows, msg.png
+		if msg.anim != nil {
+			st.anim = msg.anim // its other frames go up once it is on screen
+			return m, m.startAnims()
+		}
 		return m, nil
+
+	case framesUploadedMsg:
+		msg.st.animReady = msg.err == nil
+		return m, nil
+
+	case animTick:
+		return m, m.stepAnims(time.Now())
 
 	case emojiImgMsg:
 		if st := m.emojiImgs[msg.name]; st != nil {

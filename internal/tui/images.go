@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 	"syscall"
+	"time"
 
 	// Decoders for the formats Slack thumbnails come in.
 	_ "image/gif"
@@ -48,12 +49,31 @@ type imgState struct {
 	status     imgStatus
 	err        string
 	png        []byte // kept to resend after the pane was hidden
+
+	// An animated GIF: every frame is in the terminal under its own id
+	// (ids[0] is id), and the view prints the one showing.
+	anim      *animFrames
+	ids       []uint32
+	animReady bool // all frames uploaded
+	frame     int
+	next      time.Time // when the next frame is due
+	seen      int       // m.viewSeq of the last view that drew it
+}
+
+// shownID is the image id the view prints: the current frame's, for an
+// animation.
+func (st *imgState) shownID() uint32 {
+	if st.animReady && st.frame < len(st.ids) {
+		return st.ids[st.frame]
+	}
+	return st.id
 }
 
 type imageMsg struct {
 	fileID     string
 	cols, rows int
 	png        []byte
+	anim       *animFrames
 	err        error
 }
 
@@ -133,6 +153,17 @@ func (m *Model) fetchImageSized(key string, f backend.File, id uint32, maxCols, 
 		m.imgSem <- struct{}{} // a few downloads at a time
 		defer func() { <-m.imgSem }()
 
+		if f.Anim != "" {
+			if data, err := m.client.Download(m.ctx, f.Anim, maxThumbBytes); err == nil {
+				if a, cols, rows, err := scaleAnim(data, cw, ch, maxCols, maxRows); err == nil {
+					if err := m.gfx.Show(id, a.frames[0], cols, rows); err != nil {
+						return imageMsg{fileID: key, err: err}
+					}
+					return imageMsg{fileID: key, cols: cols, rows: rows, png: a.frames[0], anim: a}
+				}
+			}
+			// Not animated after all, or too big: the still thumbnail.
+		}
 		src := f.Thumb
 		if src == "" {
 			src = f.URL
@@ -222,9 +253,16 @@ func (m *Model) resendImages() tea.Cmd {
 	var jobs []job
 	for _, set := range []map[string]*imgState{m.images, m.emojiImgs} {
 		for _, st := range set {
-			if st.status == imgReady {
-				jobs = append(jobs, job{st.id, st.png, st.cols, st.rows})
+			if st.status != imgReady {
+				continue
 			}
+			if st.animReady {
+				for i, id := range st.ids {
+					jobs = append(jobs, job{id, st.anim.frames[i], st.cols, st.rows})
+				}
+				continue
+			}
+			jobs = append(jobs, job{st.id, st.png, st.cols, st.rows})
 		}
 	}
 	if len(jobs) == 0 {
@@ -255,8 +293,9 @@ func (m *Model) imageLines(f backend.File, width int) []string {
 	case imgFailed:
 		return wrap(sDim.Render(name+" · ")+sErr.Render(st.err), width)
 	}
+	st.seen = m.viewSeq
 	lines := []string{sDim.Render(name)}
-	return append(lines, kitty.Placeholder(st.id, st.cols, st.rows)...)
+	return append(lines, kitty.Placeholder(st.shownID(), st.cols, st.rows)...)
 }
 
 // --- opening files --------------------------------------------------------

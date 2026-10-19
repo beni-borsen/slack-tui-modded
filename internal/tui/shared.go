@@ -152,8 +152,9 @@ func (m *Model) thumbLines(f backend.File) []string {
 	if st == nil || st.status != imgReady {
 		return nil
 	}
+	st.seen = m.viewSeq
 	var out []string
-	for _, row := range kitty.Placeholder(st.id, st.cols, st.rows) {
+	for _, row := range kitty.Placeholder(st.shownID(), st.cols, st.rows) {
 		out = append(out, picture+row)
 	}
 	return out

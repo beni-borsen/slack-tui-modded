@@ -136,6 +136,8 @@ type Model struct {
 	cellW, cellH int
 	imgSem       chan struct{}
 	emojiImgs    map[string]*imgState // custom emoji images, by name
+	animating    bool                 // the animation tick is running
+	viewSeq      int                  // counts views, for what is on screen
 
 	picker  *picker
 	editing *editState

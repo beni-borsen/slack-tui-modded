@@ -13,6 +13,7 @@ import (
 )
 
 func (m *Model) View() string {
+	m.viewSeq++ // images drawn below record it; only those animate
 	if m.width == 0 || m.height == 0 {
 		return ""
 	}
