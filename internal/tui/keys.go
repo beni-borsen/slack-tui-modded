@@ -23,6 +23,9 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 	if m.search != nil && m.search.open {
 		return m.searchKey(k)
 	}
+	if m.pins != nil {
+		return m.pinsKey(k)
+	}
 	if m.cmd != nil {
 		return m.cmdKey(k)
 	}
@@ -66,6 +69,8 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 		return m.openSearch()
 	case ":":
 		return m.openCmd()
+	case "P":
+		return m.openPins()
 	case "tab":
 		m.cycleFocus(1)
 		return nil
@@ -226,6 +231,8 @@ func (m *Model) listKey(k tea.KeyMsg, l *msgList, inThread bool) tea.Cmd {
 		return m.startEdit(m.listConv(inThread), l.msgs[sel], inThread)
 	case "D":
 		return m.askDelete(m.listConv(inThread), l.msgs[sel])
+	case "p":
+		return m.togglePin(m.listConv(inThread), l.msgs[sel])
 	case "v":
 		return m.openViewer(l, sel)
 	case "o":

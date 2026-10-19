@@ -71,6 +71,24 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case pinsMsg:
+		m.pinsResult(msg)
+		return m, nil
+
+	case pinnedMsg:
+		if msg.err != nil {
+			m.setPinned(msg.conv, msg.ts, !msg.added)
+			var cmd tea.Cmd
+			if p := m.pins; p != nil && p.conv == msg.conv {
+				cmd = m.loadPins(msg.conv) // put the unpinned row back
+			}
+			return m, tea.Batch(cmd, m.setStatus(msg.err.Error(), true))
+		}
+		if msg.added {
+			return m, m.setStatus("pinned", false)
+		}
+		return m, m.setStatus("unpinned", false)
+
 	case editedMsg:
 		if msg.err != nil {
 			m.editMessage(msg.conv, msg.old)
@@ -450,6 +468,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.applyReaction(msg)
 		return m, m.waitEvent()
 
+	case backend.EvPin:
+		return m, tea.Batch(m.pinEvent(msg), m.waitEvent())
+
 	case backend.EvConversationsChanged:
 		return m, tea.Batch(m.reloadConvs(), m.waitEvent())
 
@@ -565,6 +586,9 @@ func (m *Model) editMessage(convID string, msg backend.Message) {
 				}
 				if msg.Files == nil {
 					msg.Files = msgs[i].Files
+				}
+				if !msg.Pinned { // pins change through their own events too
+					msg.Pinned = msgs[i].Pinned
 				}
 				msgs[i] = msg
 				return

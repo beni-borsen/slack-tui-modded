@@ -200,20 +200,26 @@ func (m *Model) jumpTo(h backend.Hit) tea.Cmd {
 		return tea.Batch(m.openURL(h.Permalink), m.setStatus("not a member of "+m.hitWhere(h)+", opening in Slack…", false))
 	}
 	m.closeSearch()
-	j := &jumpState{conv: h.Channel, ts: h.TS}
-	if h.ThreadTS != "" && h.ThreadTS != h.TS {
-		j.thread = h.ThreadTS
+	return m.goToMessage(h.Channel, h.Message)
+}
+
+// goToMessage opens msg's conversation (and thread, for a reply) and
+// selects it once it has loaded.
+func (m *Model) goToMessage(conv string, msg backend.Message) tea.Cmd {
+	j := &jumpState{conv: conv, ts: msg.TS}
+	if msg.ThreadTS != "" && msg.ThreadTS != msg.TS {
+		j.thread = msg.ThreadTS
 	}
 	m.jump = j
 	// open() fetches the newest page (and openThread the replies); the
 	// target is looked for when that arrives, since merging the fresh page
 	// can move messages around.
-	cmd := m.open(h.Channel)
+	cmd := m.open(conv)
 	if j.thread == "" {
 		return cmd
 	}
 	parent := backend.Message{TS: j.thread}
-	if l := m.lists[h.Channel]; l != nil {
+	if l := m.lists[conv]; l != nil {
 		if i := msgIndex(l.msgs, j.thread); i >= 0 {
 			parent = l.msgs[i]
 		}
@@ -271,7 +277,7 @@ func (m *Model) resolveJump() tea.Cmd {
 	}
 	m.jump = nil
 	if older && l.hasMore {
-		return m.setStatus("too far back to load here: o on the search result opens it in Slack", true)
+		return m.setStatus("too far back to load here: o on the result opens it in Slack", true)
 	}
 	return m.setStatus("message not found, it may have been deleted", true)
 }

@@ -20,3 +20,13 @@ func TestFromHit(t *testing.T) {
 		t.Errorf("bot hit: %+v", h)
 	}
 }
+
+func TestPermalink(t *testing.T) {
+	c := &Client{TeamURL: "https://acme.slack.com/"}
+	if got := c.Permalink("C1", "250.000100", ""); got != "https://acme.slack.com/archives/C1/p250000100" {
+		t.Errorf("message: %s", got)
+	}
+	if got := c.Permalink("C1", "250.000100", "200.000100"); got != "https://acme.slack.com/archives/C1/p250000100?thread_ts=200.000100&cid=C1" {
+		t.Errorf("reply: %s", got)
+	}
+}

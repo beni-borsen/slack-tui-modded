@@ -23,6 +23,8 @@ var commands = []command{
 		func(m *Model, a string) tea.Cmd { return m.cmdStatus(a) }},
 	{"dnd", "30m | 2h | until 17:00 | until tomorrow | off", "pause notifications; alone shows the state",
 		func(m *Model, a string) tea.Cmd { return m.cmdDND(a) }},
+	{"pins", "", "pinned messages and bookmarks of this conversation (P)",
+		func(m *Model, _ string) tea.Cmd { return m.openPins() }},
 	{"away", "", "show as away",
 		func(m *Model, _ string) tea.Cmd { return m.cmdAway(true) }},
 	{"back", "", "show as active again (Slack decides)",

@@ -43,6 +43,13 @@ type EvReaction struct {
 	Added   bool
 }
 
+// EvPin is a message pinned or unpinned, by anyone.
+type EvPin struct {
+	Channel string
+	TS      string
+	Added   bool
+}
+
 // EvConversationsChanged means our channel membership or a channel name
 // changed; the UI should reload the conversation list.
 type EvConversationsChanged struct{}
@@ -118,6 +125,10 @@ func (c *Client) translate(data any) any {
 		return EvReaction{Channel: e.Item.Channel, TS: e.Item.Timestamp, User: e.User, Name: e.Reaction, Added: true}
 	case *slackevents.ReactionRemovedEvent:
 		return EvReaction{Channel: e.Item.Channel, TS: e.Item.Timestamp, User: e.User, Name: e.Reaction}
+	case *slackevents.PinAddedEvent:
+		return pinEvent(e.Channel, e.Item, true)
+	case *slackevents.PinRemovedEvent:
+		return pinEvent(e.Channel, e.Item, false)
 	case *slackevents.MemberJoinedChannelEvent:
 		if e.User == c.SelfID {
 			return EvConversationsChanged{}
@@ -149,6 +160,18 @@ func (c *Client) translate(data any) any {
 		return EvDND{DND: newDND(s.DndEnabled, s.NextDndStartTs, s.NextDndEndTs, s.SnoozeEnabled, s.SnoozeEndtime)}
 	}
 	return nil
+}
+
+func pinEvent(channel string, it slackevents.Item, added bool) any {
+	if channel == "" {
+		channel = it.Channel
+	}
+	ts := it.Timestamp
+	if it.Message != nil && it.Message.Timestamp != "" {
+		ts = it.Message.Timestamp
+	}
+	// TS is empty for a file pinned on its own.
+	return EvPin{Channel: channel, TS: ts, Added: added}
 }
 
 func translateMessage(e *slackevents.MessageEvent) any {

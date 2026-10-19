@@ -37,6 +37,7 @@ const (
 	groupIcon   = "\uedca"
 	lockIcon    = "\uf456" // private channels
 	dndIcon     = "\uf186" // moon, for Do Not Disturb
+	pinIcon     = "\uf435" // after the time of pinned messages
 	onlineDot   = "●"      // after the names of people who are active
 )
 
@@ -102,6 +103,7 @@ type Model struct {
 
 	switcher *switcher
 	search   *searchState // `/`; nil until first used
+	pins     *pinsState   // `P`, while open
 	cmd      *cmdLine     // `:` command line, while open
 	cmdHist  []string     // commands run this session
 	jump     *jumpState   // search result being loaded into view

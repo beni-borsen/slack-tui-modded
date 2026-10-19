@@ -127,13 +127,20 @@ func (m *Model) messageLines(msg backend.Message, width int, header, inThread bo
 		if msg.User == "" && (msg.BotName != "" || msg.BotID != "") {
 			name += " " + sFaint.Render("APP")
 		}
-		lines = append(lines, name+"  "+sTime.Render(msg.Time().Format(m.cfg.TimeFormat)))
+		head := name + "  " + sTime.Render(msg.Time().Format(m.cfg.TimeFormat))
+		if msg.Pinned {
+			head += "  " + sWarn.Render(pinIcon+" pinned")
+		}
+		lines = append(lines, head)
 	}
 	text := render.Mrkdwn(msg.Text, m, mdStyles)
 	if msg.Edited {
 		text += " " + sFaint.Render("(edited)")
 	}
-	if strings.TrimSpace(msg.Text) != "" || msg.Edited {
+	if msg.Pinned && !header {
+		text += " " + sWarn.Render(pinIcon+" pinned")
+	}
+	if strings.TrimSpace(msg.Text) != "" || msg.Edited || (msg.Pinned && !header) {
 		lines = append(lines, wrap(text, width)...)
 	}
 	for _, f := range msg.Files {

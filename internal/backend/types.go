@@ -111,6 +111,7 @@ type Message struct {
 	ReplyCount  int
 	LatestReply string
 	Edited      bool
+	Pinned      bool // pinned in its conversation
 	Reactions   []Reaction
 	Files       []File
 }
@@ -133,6 +134,7 @@ func fromMsg(m slack.Msg) Message {
 		ReplyCount:  m.ReplyCount,
 		LatestReply: m.LatestReply,
 		Edited:      m.Edited != nil,
+		Pinned:      len(m.PinnedTo) > 0,
 	}
 	// A name the bot gives itself per message ("Deploy v2") wins over its
 	// profile's name ("deploy-bot"), as in Slack.

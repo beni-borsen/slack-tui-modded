@@ -93,6 +93,8 @@ expires = "until tomorrow"
 | `+` | react: emoji picker (enter adds, or removes a reaction you already have) |
 | `e` / `↑` in an empty input | edit your message / your last message (enter saves, esc cancels) |
 | `D` | delete your message (asks y/n) |
+| `p` | pin / unpin the message |
+| `P` | the conversation's bookmarks and pinned messages: `enter` opens a bookmark or goes to the message, `o` opens it in Slack, `p` unpins (also `:pins`) |
 | `o` | open the selected message's file (images in `image_viewer`) or link (browser); with several, a chooser: `1`-`9` or `enter` opens |
 | `v` | full-window image viewer from the selected message: `←` `→` step through every image in the conversation or thread, `o` opens externally, `esc` closes |
 | `x` | close thread |

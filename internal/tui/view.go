@@ -45,6 +45,8 @@ func (m *Model) View() string {
 		main = lipgloss.Place(mainW, h, lipgloss.Center, lipgloss.Center, m.renderHelp())
 	case m.search != nil && m.search.open:
 		main = m.renderSearch(mainW, h)
+	case m.pins != nil:
+		main = m.renderPins(mainW, h)
 	case m.current == unreadsID:
 		main = m.renderUnreads(mainW, h)
 	case m.thread != nil && mainW >= 80:
@@ -337,6 +339,8 @@ func (m *Model) renderHelp() string {
 		{"e", "edit your message"},
 		{"↑  (empty input)", "edit your last message"},
 		{"D", "delete your message"},
+		{"p", "pin / unpin the message"},
+		{"P", "pinned messages and bookmarks of the conversation"},
 		{"v", "view images full-window: ← → browse, o open, esc close"},
 		{"o", "open the message's file or link (a chooser when there are several)"},
 		{"x  (thread)", "close thread"},
