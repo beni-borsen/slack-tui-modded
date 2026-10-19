@@ -128,8 +128,12 @@ func (m *Model) pinsKey(k tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-// at returns the bookmark or the pin at row i.
+// at returns the bookmark or the pin at row i; both nil when the list is
+// empty (or still loading).
 func (p *pinsState) at(i int) (*backend.Bookmark, *backend.Pin) {
+	if p.count() == 0 {
+		return nil, nil
+	}
 	i = min(max(i, 0), p.count()-1)
 	if i < len(p.bookmarks) {
 		return &p.bookmarks[i], nil

@@ -48,6 +48,9 @@ func TestPinsView(t *testing.T) {
 	if m.pins == nil || !m.pins.loading {
 		t.Fatal("P should open the pins pane and load it")
 	}
+	for _, k := range []string{"p", "enter", "o", "G"} { // nothing to act on yet
+		m.Update(key(k))
+	}
 	m.Update(pinsMsg{conv: "C1",
 		bookmarks: []backend.Bookmark{{ID: "B1", Title: "Runbook", Link: "https://example.com/runbook"}},
 		pins: []backend.Pin{
