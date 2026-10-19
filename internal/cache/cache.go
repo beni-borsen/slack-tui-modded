@@ -162,7 +162,7 @@ func (c *Cache) putKV(key string, v any) {
 	})
 }
 
-func (c *Cache) SaveUsers(us []backend.User)                { c.putKV("users", us) }
+func (c *Cache) SaveUsers(us []backend.User)                 { c.putKV("users", us) }
 func (c *Cache) SaveConversations(cs []backend.Conversation) { c.putKV("conversations", cs) }
 func (c *Cache) SaveEmoji(e map[string]string)               { c.putKV("emoji", e) }
 func (c *Cache) SaveBots(b map[string]string)                { c.putKV("bots", b) }

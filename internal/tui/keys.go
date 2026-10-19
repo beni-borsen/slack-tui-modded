@@ -20,6 +20,9 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 	if m.switcher != nil {
 		return m.switcherKey(k)
 	}
+	if m.search != nil && m.search.open {
+		return m.searchKey(k)
+	}
 	if m.picker != nil {
 		return m.pickerKey(k)
 	}
@@ -56,6 +59,8 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 	case "ctrl+k", " ":
 		m.switcher = m.newSwitcher()
 		return nil
+	case "/":
+		return m.openSearch()
 	case "tab":
 		m.cycleFocus(1)
 		return nil

@@ -94,6 +94,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m, m.handleKey(msg)
 
+	case searchMsg:
+		return m, m.searchResult(msg)
+
 	case cacheMsg:
 		if msg.err != nil {
 			return m, m.setStatus("cache: "+msg.err.Error(), true)
@@ -203,6 +206,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		l := m.list(msg.id)
 		l.loading = false
 		if msg.err != nil {
+			if j := m.jump; j != nil && j.conv == msg.id {
+				m.jump = nil
+			}
 			return m, m.setStatus(msg.err.Error(), true)
 		}
 		if msg.older {
@@ -215,6 +221,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		l.hasMore, l.loaded = msg.hasMore, true
 		m.touch(msg.id)
+		var jump tea.Cmd
+		if j := m.jump; j != nil && j.thread == "" && j.conv == msg.id {
+			jump = m.resolveJump()
+		}
 		if c := m.convs[msg.id]; c != nil && len(l.msgs) > 0 {
 			for i := len(l.msgs) - 1; i >= 0; i-- {
 				if !l.msgs[i].IsReply() {
@@ -225,7 +235,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
-		return m, nil
+		return m, jump
 
 	case repliesMsg:
 		if m.thread == nil || m.thread.conv != msg.id || m.thread.ts != msg.ts {
@@ -248,6 +258,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.thread.list.msgs, m.thread.list.loaded = msg.msgs, true
 		m.touch(msg.id)
+		if j := m.jump; j != nil && j.thread != "" {
+			return m, m.resolveJump()
+		}
 		return m, nil
 
 	case sinceMsg:

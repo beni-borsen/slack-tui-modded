@@ -99,6 +99,8 @@ type Model struct {
 	attach      []*attachment   // clipboard images going out with the next send
 
 	switcher *switcher
+	search   *searchState // `/`; nil until first used
+	jump     *jumpState   // search result being loaded into view
 	help     bool
 
 	booted      bool
@@ -345,8 +347,12 @@ func (m *Model) loadHistory(id string, older bool) tea.Cmd {
 	if older && len(l.msgs) > 0 {
 		before = l.msgs[0].TS
 	}
+	limit := pageSize
+	if m.jump != nil && m.jump.conv == id {
+		limit = jumpPageSize // looking for a search result further back
+	}
 	return func() tea.Msg {
-		msgs, more, err := m.client.History(m.ctx, id, before, pageSize)
+		msgs, more, err := m.client.History(m.ctx, id, before, limit)
 		return historyMsg{id: id, msgs: msgs, hasMore: more, older: older, err: err}
 	}
 }

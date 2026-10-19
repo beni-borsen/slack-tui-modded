@@ -42,6 +42,8 @@ func (m *Model) View() string {
 		main = lipgloss.Place(mainW, h, lipgloss.Center, lipgloss.Top, "\n\n"+m.renderOpener(mainW))
 	case m.help:
 		main = lipgloss.Place(mainW, h, lipgloss.Center, lipgloss.Center, m.renderHelp())
+	case m.search != nil && m.search.open:
+		main = m.renderSearch(mainW, h)
 	case m.current == unreadsID:
 		main = m.renderUnreads(mainW, h)
 	case m.thread != nil && mainW >= 80:
@@ -260,6 +262,8 @@ func (m *Model) renderStatus() string {
 	mode := sModeN.Render("NORMAL")
 	if m.insert {
 		mode = sModeI.Render("INSERT")
+	} else if m.search != nil && m.search.typing {
+		mode = sModeI.Render("SEARCH")
 	}
 	var conn string
 	switch m.conn {
@@ -285,7 +289,7 @@ func (m *Model) renderStatus() string {
 		}
 	}
 	left := strings.Join(parts, "  ")
-	right := sDim.Render("ctrl+k jump · ? help ")
+	right := sDim.Render("ctrl+k jump · / search · ? help ")
 	gap := m.width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 1 {
 		return ansi.Truncate(left, m.width, "…")
@@ -308,6 +312,7 @@ func (m *Model) renderHelp() string {
 		{"ctrl+b alt+i  (insert)", "bold / italic the word at the cursor"},
 		{":ta @an #de  (insert)", "complete emoji, people, channels"},
 		{"esc", "back to normal mode"},
+		{"/", "search messages (from:@x in:#y after:date); enter goes there"},
 		{"u", "next unread conversation"},
 		{"r", "mark conversation read"},
 		{"z  enter on header", "fold / unfold sidebar section"},
