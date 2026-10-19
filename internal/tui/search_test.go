@@ -155,3 +155,49 @@ func TestSearchCompletion(t *testing.T) {
 		t.Errorf("enter should now search")
 	}
 }
+
+func TestSearchStep(t *testing.T) {
+	m := fakeModel(t, 100, 24)
+	m.Update(key("n"))
+	if !strings.Contains(m.status, "no search results") {
+		t.Errorf("status %q", m.status)
+	}
+	m.Update(key("/"))
+	m.Update(key("deploy"))
+	m.Update(key("enter"))
+	m.Update(searchMsg{seq: m.search.seq, query: "deploy", res: backend.SearchPage{Total: 3, Page: 1, Pages: 2, Hits: []backend.Hit{
+		hit("C1", "300.000001", "", "U2", "one"),
+		hit("C2", "200.0", "", "U1", "two"),
+	}}})
+	m.Update(key("enter")) // to the first result
+	if m.current != "C1" || m.search.open {
+		t.Fatalf("current %s", m.current)
+	}
+	m.Update(key("N"))
+	if m.status != "already at the first result" {
+		t.Errorf("status %q", m.status)
+	}
+	m.Update(key("n"))
+	if m.current != "C2" || m.search.sel != 1 || m.status != "result 2 of 3: deploy" {
+		t.Errorf("n: current %s sel %d status %q", m.current, m.search.sel, m.status)
+	}
+	// Past the loaded hits: the next page is fetched, then gone to.
+	m.Update(key("n"))
+	if !m.search.loading || !m.search.stepping {
+		t.Fatal("n at the end should fetch the next page")
+	}
+	m.Update(searchMsg{seq: m.search.seq, query: "deploy", more: true, res: backend.SearchPage{Total: 3, Page: 2, Pages: 2, Hits: []backend.Hit{
+		hit("D1", "100.0", "", "U1", "three"),
+	}}})
+	if m.current != "D1" || m.search.sel != 2 {
+		t.Errorf("after the page: current %s sel %d", m.current, m.search.sel)
+	}
+	m.Update(key("n"))
+	if m.status != "no more results" {
+		t.Errorf("status %q", m.status)
+	}
+	m.Update(key("N"))
+	if m.current != "C2" {
+		t.Errorf("N: current %s", m.current)
+	}
+}

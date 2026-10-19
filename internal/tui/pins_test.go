@@ -85,3 +85,66 @@ func TestPinsNeedConversation(t *testing.T) {
 		t.Error("the Unreads view has no pins")
 	}
 }
+
+func TestBookmarkEditing(t *testing.T) {
+	m := fakeModel(t, 120, 30)
+	m.open("C1")
+	m.Update(key("P"))
+	m.Update(pinsMsg{conv: "C1", bookmarks: []backend.Bookmark{{ID: "B1", Title: "Runbook", Link: "https://example.com/runbook"}}})
+
+	m.Update(key("e"))
+	if m.cmd == nil || m.cmd.input.Value() != "bookmark https://example.com/runbook Runbook" || m.cmd.bookmark == nil {
+		t.Fatalf("e should open :bookmark with the bookmark: %+v", m.cmd)
+	}
+	m.Update(key(" "))
+	m.Update(key("v2"))
+	if m.pins == nil {
+		t.Fatal("typing went to the pins pane, not the command line")
+	}
+	m.Update(key("enter"))
+	if m.cmd != nil || m.bmEdit != nil {
+		t.Error("the command line should close and forget the edit")
+	}
+	m.Update(bookmarkedMsg{conv: "C1", done: "bookmark changed"})
+	if m.status != "bookmark changed" || !m.pins.loading {
+		t.Errorf("status %q; an open list should be fetched again", m.status)
+	}
+
+	m.Update(pinsMsg{conv: "C1", bookmarks: []backend.Bookmark{{ID: "B1", Title: "Runbook v2", Link: "https://example.com/runbook"}}})
+	m.Update(key("d"))
+	if m.confirm == nil || m.confirm.prompt != "remove the bookmark Runbook v2? y/n" {
+		t.Fatalf("confirm %+v", m.confirm)
+	}
+	m.Update(key("n"))
+	if m.pins == nil || m.status != "cancelled" {
+		t.Errorf("n should answer the question, not leave the pane: status %q", m.status)
+	}
+
+	m.Update(key("a"))
+	if m.cmd == nil || m.cmd.input.Value() != "bookmark " || m.cmd.bookmark != nil {
+		t.Fatalf("a should open an empty :bookmark: %+v", m.cmd)
+	}
+	m.Update(key("esc"))
+}
+
+func TestCmdBookmark(t *testing.T) {
+	m := fakeModel(t, 100, 24)
+	m.runCmd("bookmark example.com")
+	if m.status != "open a conversation first" {
+		t.Errorf("status %q", m.status)
+	}
+	m.open("C1")
+	for line, want := range map[string]string{
+		"bookmark":               "usage: :bookmark link [title]",
+		"bookmark ftp://x.dk/f":  "not a web link: ftp://x.dk/f",
+		"bookmark mailto:a@b.dk": "not a web link: https://mailto:a@b.dk",
+	} {
+		m.runCmd(line)
+		if m.status != want {
+			t.Errorf("%s: status %q, want %q", line, m.status, want)
+		}
+	}
+	if m.runCmd("bookmark example.com/docs/ The docs") == nil {
+		t.Error("a link should be added")
+	}
+}

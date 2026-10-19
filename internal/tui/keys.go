@@ -20,6 +20,18 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 	if m.switcher != nil {
 		return m.switcherKey(k)
 	}
+	// The command line and y/n questions can open over the panes below
+	// (`a` and `d` in the pins pane).
+	if m.cmd != nil {
+		return m.cmdKey(k)
+	}
+	if c := m.confirm; c != nil {
+		m.confirm = nil
+		if k.String() == "y" {
+			return c.yes()
+		}
+		return m.setStatus("cancelled", false)
+	}
 	if m.search != nil && m.search.open {
 		return m.searchKey(k)
 	}
@@ -29,21 +41,11 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 	if m.chans != nil {
 		return m.chansKey(k)
 	}
-	if m.cmd != nil {
-		return m.cmdKey(k)
-	}
 	if m.picker != nil {
 		return m.pickerKey(k)
 	}
 	if m.opener != nil {
 		return m.openerKey(k)
-	}
-	if c := m.confirm; c != nil {
-		m.confirm = nil
-		if k.String() == "y" {
-			return c.yes()
-		}
-		return m.setStatus("cancelled", false)
 	}
 	if m.sched != nil {
 		return m.schedKey(k)
@@ -73,6 +75,10 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 		return nil
 	case "/":
 		return m.openSearch()
+	case "n":
+		return m.searchStep(1)
+	case "N":
+		return m.searchStep(-1)
 	case ":":
 		return m.openCmd()
 	case "P":

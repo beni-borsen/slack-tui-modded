@@ -65,6 +65,37 @@ func (c *Client) Bookmarks(ctx context.Context, id string) ([]Bookmark, error) {
 	return out, nil
 }
 
+// AddBookmark puts a link in the conversation's bookmarks bar.
+func (c *Client) AddBookmark(ctx context.Context, id, title, link string) error {
+	err := retry(ctx, func() error {
+		_, err := c.api.AddBookmarkContext(ctx, id, slack.AddBookmarkParameters{Title: title, Type: "link", Link: link})
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("bookmarks.add: %w", err)
+	}
+	return nil
+}
+
+// EditBookmark changes a bookmark's title and link.
+func (c *Client) EditBookmark(ctx context.Context, id, bookmarkID, title, link string) error {
+	err := retry(ctx, func() error {
+		_, err := c.api.EditBookmarkContext(ctx, id, bookmarkID, slack.EditBookmarkParameters{Title: &title, Link: link})
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("bookmarks.edit: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) RemoveBookmark(ctx context.Context, id, bookmarkID string) error {
+	if err := retry(ctx, func() error { return c.api.RemoveBookmarkContext(ctx, id, bookmarkID) }); err != nil {
+		return fmt.Errorf("bookmarks.remove: %w", err)
+	}
+	return nil
+}
+
 // Pin pins (or with add=false unpins) a message.
 func (c *Client) Pin(ctx context.Context, id, ts string, add bool) error {
 	ref := slack.NewRefToMessage(id, ts)

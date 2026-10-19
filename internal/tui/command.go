@@ -27,6 +27,8 @@ var commands = []command{
 		func(m *Model, a string) tea.Cmd { return m.cmdLater(a) }},
 	{"scheduled", "", "scheduled messages: go to, back to composer, cancel",
 		func(m *Model, _ string) tea.Cmd { return m.openScheduled() }},
+	{"bookmark", "link [title]", "add a link to this conversation's bookmarks (a and e in P)",
+		func(m *Model, a string) tea.Cmd { return m.cmdBookmark(a) }},
 	{"pins", "", "pinned messages and bookmarks of this conversation (P)",
 		func(m *Model, _ string) tea.Cmd { return m.openPins() }},
 	{"join", "[#channel]", "join a public channel; alone browses them all",
@@ -49,6 +51,7 @@ type cmdLine struct {
 	dismissed string
 	histAt    int // index into m.cmdHist while browsing it; len = the new line
 	draft     string
+	bookmark  *bookmarkEdit // `e` in the pins pane: :bookmark changes this one
 }
 
 func (m *Model) openCmd() tea.Cmd {
@@ -120,6 +123,8 @@ func (m *Model) cmdKey(k tea.KeyMsg) tea.Cmd {
 	case "enter":
 		line := c.input.Value()
 		m.cmd = nil
+		m.bmEdit = c.bookmark
+		defer func() { m.bmEdit = nil }()
 		return m.runCmd(line)
 	case "backspace":
 		if c.input.Value() == "" {

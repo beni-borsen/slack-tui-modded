@@ -30,6 +30,7 @@ type searchState struct {
 	seq     int // ignores answers to queries that were replaced
 
 	sel, top int
+	stepping bool // `n` ran past the loaded hits; go on when the next page lands
 
 	complete  *completion // people and channels while typing from:@an, in:#de
 	dismissed string
@@ -87,6 +88,7 @@ func (m *Model) runSearch(query string, page int) tea.Cmd {
 	if page == 1 {
 		s.seq++
 		s.query, s.hits, s.total, s.page, s.pages, s.sel, s.top, s.err = query, nil, 0, 0, 0, 0, 0, ""
+		s.stepping = false
 	}
 	s.loading = true
 	seq := s.seq
@@ -103,6 +105,7 @@ func (m *Model) searchResult(msg searchMsg) tea.Cmd {
 	}
 	s.loading = false
 	if msg.err != nil {
+		s.stepping = false
 		s.err = msg.err.Error()
 		return nil
 	}
@@ -111,7 +114,39 @@ func (m *Model) searchResult(msg searchMsg) tea.Cmd {
 	}
 	s.hits = append(s.hits, msg.res.Hits...)
 	s.total, s.page, s.pages = msg.res.Total, msg.res.Page, msg.res.Pages
+	if s.stepping {
+		s.stepping = false
+		if msg.more {
+			return m.searchStep(1)
+		}
+	}
 	return nil
+}
+
+// searchStep is `n` (dir 1) and `N` (-1) outside the results: it goes to the
+// next or previous result without opening the list again.
+func (m *Model) searchStep(dir int) tea.Cmd {
+	s := m.search
+	if s == nil || len(s.hits) == 0 {
+		return m.setStatus("no search results (/ searches)", false)
+	}
+	i := min(max(s.sel, 0), len(s.hits)-1) + dir
+	switch {
+	case i < 0:
+		return m.setStatus("already at the first result", false)
+	case i >= len(s.hits) && s.page < s.pages:
+		s.stepping = true
+		status := m.setStatus("loading more results…", false)
+		if s.loading { // already on its way
+			return status
+		}
+		return tea.Batch(status, m.runSearch(s.query, s.page+1))
+	case i >= len(s.hits):
+		return m.setStatus("no more results", false)
+	}
+	s.sel = i
+	status := m.setStatus(fmt.Sprintf("result %d of %d: %s", i+1, max(s.total, len(s.hits)), s.query), false)
+	return tea.Batch(m.jumpTo(s.hits[i]), status)
 }
 
 func (m *Model) searchKey(k tea.KeyMsg) tea.Cmd {

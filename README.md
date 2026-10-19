@@ -87,6 +87,7 @@ expires = "until tomorrow"
 | `:ta` `@an` `#de` (insert mode) | complete emoji, people (also @here/@channel/@everyone) and channels: `tab`/`enter` inserts, `↑` `↓` choose, `esc` closes. People and channels are sent as real mentions |
 | `esc` | back to normal mode |
 | `/` | search messages: Slack's own query syntax (`from:@anna in:#dev after:2026-01-01 "exact words"`); typing `@`, `#` or a name after `from:`/`in:` suggests people and channels (Slack's search matches handles, not display names, so pick from the list); `enter` goes to the message (its thread for replies), `o` opens it in Slack |
+| `n` / `N` | after a search: go to the next / previous result without opening the list (the next page is fetched when needed) |
 | `:` | command line (below): `tab` completes, `↑` `↓` history, `esc` leaves |
 | `u` | next unread conversation |
 | `r` | mark conversation read |
@@ -95,7 +96,7 @@ expires = "until tomorrow"
 | `e` / `↑` in an empty input | edit your message / your last message (enter saves, esc cancels) |
 | `D` | delete your message (asks y/n) |
 | `p` | pin / unpin the message |
-| `P` | the conversation's bookmarks and pinned messages: `enter` opens a bookmark or goes to the message, `o` opens it in Slack, `p` unpins (also `:pins`) |
+| `P` | the conversation's bookmarks and pinned messages: `enter` opens a bookmark or goes to the message, `o` opens it in Slack, `p` unpins, `a` / `e` / `d` add, edit or remove a bookmark (also `:pins`) |
 | `o` | open the selected message's file (images in `image_viewer`) or link (browser); with several, a chooser: `1`-`9` or `enter` opens |
 | `v` | full-window image viewer from the selected message: `←` `→` step through every image in the conversation or thread, `o` opens externally, `esc` closes |
 | `x` | close thread |
@@ -115,6 +116,7 @@ expires = "until tomorrow"
 | `:leave` / `:leave #name` | leave this channel (or the one named), after a y/n |
 | `:create [--private] name` | make a channel (lower-cased, spaces become dashes) and open it |
 | `:invite @person …` | add people to this channel; tab completes handles |
+| `:bookmark link [title]` | add a link to the conversation's bookmarks (`https://` is added when left out; no title means the link is the title) |
 | `:away` / `:back` | show as away / let Slack decide again |
 
 A unique prefix is enough (`:st`, `:d 1h`). Your DND, away state and status sit in the status bar.

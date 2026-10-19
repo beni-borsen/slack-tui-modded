@@ -95,6 +95,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case invitedMsg:
 		return m, m.invitedResult(msg)
 
+	case bookmarkedMsg:
+		return m, m.bookmarkedResult(msg)
+
 	case pinsMsg:
 		m.pinsResult(msg)
 		return m, nil

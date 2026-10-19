@@ -103,13 +103,14 @@ type Model struct {
 	attach      []*attachment   // clipboard images going out with the next send
 
 	switcher *switcher
-	search   *searchState // `/`; nil until first used
-	pins     *pinsState   // `P`, while open
-	sched    *schedState  // `:scheduled`, while open
-	chans    *chansState  // `:join` channel browser, while open
-	cmd      *cmdLine     // `:` command line, while open
-	cmdHist  []string     // commands run this session
-	jump     *jumpState   // search result being loaded into view
+	search   *searchState  // `/`; nil until first used
+	pins     *pinsState    // `P`, while open
+	sched    *schedState   // `:scheduled`, while open
+	chans    *chansState   // `:join` channel browser, while open
+	cmd      *cmdLine      // `:` command line, while open
+	cmdHist  []string      // commands run this session
+	bmEdit   *bookmarkEdit // the bookmark the :bookmark being run changes
+	jump     *jumpState    // search result being loaded into view
 	help     bool
 
 	booted      bool

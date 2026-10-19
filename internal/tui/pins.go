@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"net/url"
 	"strings"
 	"sync"
 
@@ -27,6 +28,17 @@ type pinsMsg struct {
 	bookmarks []backend.Bookmark
 	pins      []backend.Pin
 	errs      []string
+}
+
+// bookmarkEdit is the bookmark `e` is changing.
+type bookmarkEdit struct {
+	conv string
+	b    backend.Bookmark
+}
+
+type bookmarkedMsg struct {
+	conv, done string
+	err        error
 }
 
 type pinnedMsg struct {
@@ -123,6 +135,16 @@ func (m *Model) pinsKey(k tea.KeyMsg) tea.Cmd {
 		if _, pin := p.at(p.sel); pin != nil && pin.TS != "" {
 			return m.togglePin(pin.Channel, pin.Message)
 		}
+	case "a":
+		return m.bookmarkCmd("bookmark ", nil)
+	case "e":
+		if b, _ := p.at(p.sel); b != nil {
+			return m.bookmarkCmd("bookmark "+b.Link+" "+b.Title, &bookmarkEdit{conv: p.conv, b: *b})
+		}
+	case "d", "D", "x":
+		if b, _ := p.at(p.sel); b != nil {
+			return m.askRemoveBookmark(p.conv, *b)
+		}
 	}
 	p.sel = min(max(p.sel, 0), max(n-1, 0))
 	return nil
@@ -202,7 +224,8 @@ func (m *Model) renderPins(w, h int) string {
 	header := []string{title, rule(w, true)}
 	footer := sFaint.Render("  ") + sKey.Render("enter") + sFaint.Render(" go to / open  ") +
 		sKey.Render("o") + sFaint.Render(" open in Slack  ") + sKey.Render("p") + sFaint.Render(" unpin  ") +
-		sKey.Render("esc") + sFaint.Render(" close")
+		sKey.Render("a e d") + sFaint.Render(" add / edit / remove bookmark  ") + sKey.Render("esc") + sFaint.Render(" close")
+	footer = ansi.Truncate(footer, w, "…")
 	for _, e := range p.errs {
 		header = append(header, "  "+sErr.Render(e))
 	}
@@ -296,4 +319,79 @@ func (m *Model) renderPins(w, h int) string {
 		view[i] = ansi.Truncate(view[i], w, "…")
 	}
 	return strings.Join(append(append(header, view...), rule(w, false), footer), "\n")
+}
+
+// bookmarkCmd opens the command line with a :bookmark to finish.
+func (m *Model) bookmarkCmd(line string, edit *bookmarkEdit) tea.Cmd {
+	cmd := m.openCmd()
+	m.cmd.input.SetValue(line)
+	m.cmd.input.CursorEnd()
+	m.cmd.bookmark = edit
+	return cmd
+}
+
+// cmdBookmark adds a link to the conversation's bookmarks, or changes the
+// one `e` picked: ":bookmark example.com/runbook Runbook". Without a title
+// the link is the title.
+func (m *Model) cmdBookmark(args string) tea.Cmd {
+	edit := m.bmEdit
+	conv := m.current
+	if edit != nil {
+		conv = edit.conv
+	}
+	if conv == unreadsID || m.convs[conv] == nil {
+		return m.setStatus("open a conversation first", false)
+	}
+	link, title, _ := strings.Cut(strings.TrimSpace(args), " ")
+	if link == "" {
+		return m.setStatus("usage: :bookmark link [title]", false)
+	}
+	if !strings.Contains(link, "://") {
+		link = "https://" + link
+	}
+	if u, err := url.Parse(link); err != nil || u.Host == "" || u.User != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return m.setStatus("not a web link: "+link, true)
+	}
+	title = strings.TrimSpace(title)
+	if title == "" {
+		title = strings.TrimSuffix(strings.SplitN(link, "://", 2)[1], "/")
+	}
+	if edit != nil {
+		id := edit.b.ID
+		return func() tea.Msg {
+			return bookmarkedMsg{conv: conv, done: "bookmark changed", err: m.client.EditBookmark(m.ctx, conv, id, title, link)}
+		}
+	}
+	return func() tea.Msg {
+		return bookmarkedMsg{conv: conv, done: "bookmarked " + title, err: m.client.AddBookmark(m.ctx, conv, title, link)}
+	}
+}
+
+func (m *Model) askRemoveBookmark(conv string, b backend.Bookmark) tea.Cmd {
+	label := b.Title
+	if label == "" {
+		label = b.Link
+	}
+	m.confirm = &confirmState{
+		prompt: "remove the bookmark " + ansi.Truncate(label, 40, "…") + "? y/n",
+		yes: func() tea.Cmd {
+			return func() tea.Msg {
+				return bookmarkedMsg{conv: conv, done: "bookmark removed", err: m.client.RemoveBookmark(m.ctx, conv, b.ID)}
+			}
+		},
+	}
+	return nil
+}
+
+// bookmarkedResult reports a change and fetches an open list again.
+func (m *Model) bookmarkedResult(msg bookmarkedMsg) tea.Cmd {
+	if msg.err != nil {
+		return m.setStatus(msg.err.Error(), true)
+	}
+	var reload tea.Cmd
+	if p := m.pins; p != nil && p.conv == msg.conv {
+		p.loading = true
+		reload = m.loadPins(msg.conv)
+	}
+	return tea.Batch(m.setStatus(msg.done, false), reload)
 }
