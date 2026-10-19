@@ -241,7 +241,7 @@ func (m *Model) renderUnreads(w, h int) string {
 				msgs = msgs[len(msgs)-show:]
 			}
 			for _, msg := range msgs {
-				name := nameStyle(msg.User + msg.BotName).Render(m.senderName(msg))
+				name := nameStyle(senderKey(msg)).Render(m.senderName(msg))
 				text := strings.ReplaceAll(render.Mrkdwn(msg.Text, m, mdStyles), "\n", " ")
 				if strings.TrimSpace(msg.Text) == "" && len(msg.Files) > 0 {
 					text = sDim.Render(msg.Files[0].Name)

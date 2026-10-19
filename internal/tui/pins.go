@@ -259,7 +259,7 @@ func (m *Model) renderPins(w, h int) string {
 				block = append(block, sNormal.Render(name), sDim.Render("file"))
 			}
 		} else {
-			name := nameStyle(pin.User + pin.BotName + pin.BotID).Render(m.senderName(pin.Message))
+			name := nameStyle(senderKey(pin.Message)).Render(m.senderName(pin.Message))
 			line := name + " " + sTime.Render(relTime(pin.Time(), m.cfg.TimeFormat))
 			if pin.IsReply() {
 				line += sThread.Render("  in thread")

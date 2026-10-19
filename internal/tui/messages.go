@@ -64,7 +64,7 @@ func (m *Model) renderList(l *msgList, width, height int, active, inThread bool)
 			pre = append(pre, sNewLine.Render(strings.Repeat("─", max(0, width-6))+" new"))
 		}
 		grouped := prev != nil && len(pre) == 0 && !(inThread && i == 1) &&
-			prev.User == msg.User && prev.BotName == msg.BotName && prev.BotID == msg.BotID &&
+			senderKey(*prev) == senderKey(*msg) &&
 			!systemSubtypes[prev.SubType] && !systemSubtypes[msg.SubType] &&
 			msg.Time().Sub(prev.Time()) < 5*time.Minute
 		body := m.messageLines(*msg, width-2, !grouped, inThread)
@@ -123,7 +123,7 @@ func (m *Model) messageLines(msg backend.Message, width int, header, inThread bo
 		return wrap(sSystem.Render("→ ")+text+"  "+t, width)
 	}
 	if header {
-		name := nameStyle(msg.User + msg.BotName + msg.BotID).Render(m.senderName(msg))
+		name := nameStyle(senderKey(msg)).Render(m.senderName(msg))
 		if msg.User == "" && (msg.BotName != "" || msg.BotID != "") {
 			name += " " + sFaint.Render("APP")
 		}

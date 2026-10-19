@@ -483,7 +483,7 @@ func (m *Model) renderSearch(w, h int) string {
 		if hit.ThreadTS != "" && hit.ThreadTS != hit.TS {
 			where += sThread.Render("  in thread")
 		}
-		name := nameStyle(hit.User + hit.BotName).Render(m.senderName(hit.Message))
+		name := nameStyle(senderKey(hit.Message)).Render(m.senderName(hit.Message))
 		block := []string{where, name + " " + sTime.Render(relTime(hit.Time(), m.cfg.TimeFormat))}
 		text := strings.ReplaceAll(render.Mrkdwn(unmarkEntities(hit.Text), m, mdStyles), "\n", " ")
 		text = strings.NewReplacer(backend.HitStart, hitOn, backend.HitEnd, hitOff).Replace(text)

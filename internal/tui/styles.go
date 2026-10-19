@@ -5,6 +5,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/magnusdalkvist/slack-tui/internal/backend"
 	"github.com/magnusdalkvist/slack-tui/internal/render"
 )
 
@@ -72,6 +73,16 @@ var mdStyles = render.Styles{
 	Channel:      lipgloss.NewStyle().Foreground(cAccent),
 	UnknownEmoji: lipgloss.NewStyle().Foreground(cDim),
 	CustomEmoji:  lipgloss.NewStyle().Foreground(lipgloss.Color("180")).Background(cCodeBg),
+}
+
+// senderKey is who a message is from, for its name colour and grouping: the
+// person when there is one, since messages people send through an app (this
+// one included) also carry the app's bot_id; otherwise the bot.
+func senderKey(msg backend.Message) string {
+	if msg.User != "" {
+		return msg.User
+	}
+	return msg.BotName + msg.BotID
 }
 
 func nameStyle(userID string) lipgloss.Style {
