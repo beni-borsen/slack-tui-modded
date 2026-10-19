@@ -94,7 +94,7 @@ type File struct {
 	Thumb string
 	// Anim is an animated version for GIFs (thumbnails are still frames).
 	Anim string
-	W, H  int
+	W, H int
 }
 
 // IsImage is true for files Slack made a picture thumbnail of.
