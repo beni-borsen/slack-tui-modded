@@ -2,9 +2,13 @@ package backend
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/slack-go/slack"
@@ -64,11 +68,32 @@ func (c *Client) ScheduledMessages(ctx context.Context) ([]Scheduled, error) {
 	return out, nil
 }
 
-// Unschedule cancels a scheduled message.
+// Unschedule cancels a scheduled message. It is posted by hand: slack-go
+// always adds as_user=false, which Slack now refuses ("invalid_arguments",
+// deprecated_argument as_user).
 func (c *Client) Unschedule(ctx context.Context, channel, id string) error {
+	form := url.Values{"channel": {channel}, "scheduled_message_id": {id}}
 	err := retry(ctx, func() error {
-		_, err := c.api.DeleteScheduledMessageContext(ctx, &slack.DeleteScheduledMessageParameters{Channel: channel, ScheduledMessageID: id})
-		return err
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, slack.APIURL+"chat.deleteScheduledMessage", strings.NewReader(form.Encode()))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Authorization", "Bearer "+c.token)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode == http.StatusTooManyRequests {
+			wait, _ := strconv.Atoi(resp.Header.Get("Retry-After"))
+			return &slack.RateLimitedError{RetryAfter: time.Duration(wait) * time.Second}
+		}
+		var r slack.SlackResponse
+		if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
+			return fmt.Errorf("HTTP %d: %w", resp.StatusCode, err)
+		}
+		return r.Err()
 	})
 	if err != nil {
 		return fmt.Errorf("chat.deleteScheduledMessage: %w", err)
