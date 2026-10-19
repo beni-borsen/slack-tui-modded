@@ -267,7 +267,8 @@ func (m *Model) sideRow(it sideItem, cursor bool, width int) string {
 	}
 
 	var icon, label, status string
-	unread, badge, active := false, 0, false
+	unread, badge := false, 0
+	active, known := false, false // presence; known once polled
 	if it.id == unreadsID {
 		n := m.unreadCount()
 		icon, label, unread = unreadsIcon, "Unreads", n > 0
@@ -292,7 +293,7 @@ func (m *Model) sideRow(it sideItem, cursor bool, width int) string {
 		label = m.convLabel(c)
 		unread, badge = c.Unread(), c.Mentions
 		if c.Kind == backend.KindDM {
-			active = m.presence[c.UserID]
+			active, known = m.presence[c.UserID]
 			if s := m.statusEmoji(c.UserID); s != "" {
 				status = " " + s
 			}
@@ -314,13 +315,17 @@ func (m *Model) sideRow(it sideItem, cursor bool, width int) string {
 	if unread {
 		style = sUnread
 	}
-	// People who are active get a green icon, as Slack's green dot.
+	// Presence colours the icon: green while active, amber when away;
+	// people not polled yet keep the row's colour.
 	iconStyle := style
 	if it.id == m.current {
 		style, iconStyle = sActive, sActive
 	}
-	if active {
+	switch {
+	case active:
 		iconStyle = iconStyle.Foreground(cOK)
+	case known:
+		iconStyle = iconStyle.Foreground(cWarn)
 	}
 	text := iconStyle.Render(icon) + style.Render(" "+label)
 	pad := max(0, width-1-lipgloss.Width(text)-ansi.StringWidth(status)-lipgloss.Width(badgeStr))

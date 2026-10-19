@@ -192,6 +192,19 @@ func TestStatusAndPresenceShown(t *testing.T) {
 	if green == 0 {
 		t.Error("Anna's DM row not found")
 	}
+	// Bob is away: amber (colour 215).
+	amber := 0
+	for _, l := range strings.Split(raw, "\n") {
+		if strings.Contains(ansi.Strip(l), userIcon+" Bob") {
+			if !strings.Contains(l, "38;5;215m"+userIcon) {
+				t.Errorf("Bob's icon not amber: %q", l)
+			}
+			amber++
+		}
+	}
+	if amber == 0 {
+		t.Error("Bob's DM row not found")
+	}
 
 	m.open("D1")
 	v = dump(t, m)

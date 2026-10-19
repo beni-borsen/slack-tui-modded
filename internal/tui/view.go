@@ -116,7 +116,7 @@ func (m *Model) renderConvPane(w, h int) string {
 		if active, ok := m.presence[c.UserID]; ok && active {
 			title += "  " + sOK.Render("active")
 		} else if ok {
-			title += "  " + sDim.Render("away")
+			title += "  " + sWarn.Render("away")
 		}
 		if line := m.statusLine(c.UserID); line != "" {
 			if exp := m.users[c.UserID].StatusExpires; exp > 0 {

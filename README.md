@@ -109,7 +109,7 @@ expires = "until tomorrow"
 | `:away` / `:back` | show as away / let Slack decide again |
 
 A unique prefix is enough (`:st`, `:d 1h`). Your DND, away state and status sit in the status bar.
-People in the DM list get a green icon while active (checked every `presence_minutes`) and their
+People in the DM list get a green icon while active and an amber one when away (checked every `presence_minutes`) and their
 status emoji after the name; the open DM's header shows their status and when it ends.
 
 ## Images
