@@ -82,6 +82,7 @@ expires = "until tomorrow"
 | `enter` | open conversation, or open the selected message's thread |
 | `i` / `a` | write in the focused pane (channel or thread) |
 | `enter` / `alt+enter`, `ctrl+j` | send / new line (insert mode) |
+| `- `, `* `, `• `, `1. ` (line start) | the lines are sent as a real Slack list (indent with two spaces per level), like the Slack app's editor; also from `slack @person` |
 | `ctrl+b` / `alt+i` (insert mode) | bold / italic the word at the cursor (again to undo; with no word, starts a `**` pair). `[label](https://…)` is sent as a link |
 | paste an image, `ctrl+v` | attach the clipboard image (repeat for up to 10 in one message); `enter` uploads it with the typed text, `ctrl+x` drops it (insert mode) |
 | `ctrl+s` (insert mode) | send later: opens `:later ` for a time (below) |

@@ -143,6 +143,11 @@ func fromMsg(m slack.Msg) Message {
 	} else if out.User == "" && m.BotProfile != nil {
 		out.BotName = m.BotProfile.Name
 	}
+	// Slack flattens the text of a message with a list onto one line;
+	// its blocks still have the lines.
+	if t, ok := blocksText(m.Blocks); ok {
+		out.Text = t
+	}
 	// Bot messages often carry everything in attachments.
 	var extra []string
 	for _, a := range m.Attachments {

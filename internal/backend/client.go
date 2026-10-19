@@ -217,7 +217,12 @@ func (c *Client) Replies(ctx context.Context, id, threadTS string) ([]Message, e
 
 // Post sends a message as the user, into a thread when threadTS is set.
 func (c *Client) Post(ctx context.Context, id, text, threadTS string) (string, error) {
-	opts := []slack.MsgOption{slack.MsgOptionText(text, false), slack.MsgOptionLinkNames(true)}
+	opts := []slack.MsgOption{slack.MsgOptionLinkNames(true)}
+	if blocks := listBlocks(text); blocks != nil {
+		opts = append(opts, slack.MsgOptionText(listFallback(text), false), slack.MsgOptionBlocks(blocks...))
+	} else {
+		opts = append(opts, slack.MsgOptionText(text, false))
+	}
 	if threadTS != "" {
 		opts = append(opts, slack.MsgOptionTS(threadTS))
 	}
@@ -278,7 +283,12 @@ func (c *Client) React(ctx context.Context, id, ts, name string, add bool) error
 // Edit replaces the text of one of the user's own messages.
 func (c *Client) Edit(ctx context.Context, id, ts, text string) error {
 	err := retry(ctx, func() error {
-		_, _, _, err := c.api.UpdateMessageContext(ctx, id, ts, slack.MsgOptionText(text, false))
+		// No list: an empty block list clears one the message had.
+		opt := []slack.MsgOption{slack.MsgOptionText(text, false), slack.MsgOptionBlocks()}
+		if blocks := listBlocks(text); blocks != nil {
+			opt = []slack.MsgOption{slack.MsgOptionText(listFallback(text), false), slack.MsgOptionBlocks(blocks...)}
+		}
+		_, _, _, err := c.api.UpdateMessageContext(ctx, id, ts, opt...)
 		return err
 	})
 	if err != nil {
