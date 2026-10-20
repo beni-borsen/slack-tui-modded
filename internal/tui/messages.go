@@ -177,7 +177,34 @@ func wrap(s string, width int) []string {
 	if width < 4 {
 		width = 4
 	}
-	return linksPerLine(strings.Split(ansi.Wrap(s, width, ""), "\n"))
+	var out []string
+	for _, line := range strings.Split(s, "\n") {
+		out = append(out, hang(line, width)...)
+	}
+	return linksPerLine(out)
+}
+
+// reItem is the start of a list item: "• ", "  ◦ ", "- ", "12. ".
+var reItem = regexp.MustCompile(`^ *(?:[•◦▪‣-]|\d{1,3}[.)]) +`)
+
+// hang wraps one line; a list item's later lines line up under its text,
+// not under the bullet, as in Slack.
+func hang(line string, width int) []string {
+	n := len(reItem.FindString(line)) // the bullet is plain text, so bytes line up
+	pre := line[:n]
+	w := ansi.StringWidth(pre)
+	if n == 0 || width-w < 10 {
+		return strings.Split(ansi.Wrap(line, width, ""), "\n")
+	}
+	lines := strings.Split(ansi.Wrap(line[n:], width-w, ""), "\n")
+	for i := range lines {
+		if i == 0 {
+			lines[i] = pre + lines[i]
+		} else {
+			lines[i] = strings.Repeat(" ", w) + lines[i]
+		}
+	}
+	return lines
 }
 
 var reEsc = regexp.MustCompile("\x1b\\[[0-9;:]*m|\x1b]8;[^;\x1b]*;([^\x1b]*)\x1b\\\\")

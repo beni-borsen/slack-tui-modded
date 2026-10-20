@@ -11,6 +11,7 @@ import (
 	"github.com/magnusdalkvist/slack-tui/internal/auth"
 	"github.com/magnusdalkvist/slack-tui/internal/backend"
 	"github.com/magnusdalkvist/slack-tui/internal/config"
+	"github.com/magnusdalkvist/slack-tui/internal/render"
 )
 
 // fakeModel builds a model with canned data and no network.
@@ -279,5 +280,27 @@ func TestSenderKeyIgnoresAppBotID(t *testing.T) {
 	}})
 	if v := dump(t, m); strings.Count(v, "Anna Jensen") != 1+strings.Count(m.renderSidebar(30, 24), "Anna Jensen") {
 		t.Errorf("the two messages should be one group:\n%s", v)
+	}
+}
+
+func TestListItemsHang(t *testing.T) {
+	text := render.Mrkdwn("intro line\n• first item that is long enough to wrap\n  ◦ nested *item* that wraps too\n12. numbered item wraps here", fakeModel(t, 100, 30), mdStyles)
+	got := wrap(text, 20)
+	var plain []string
+	for _, l := range got {
+		plain = append(plain, ansi.Strip(l))
+	}
+	want := []string{
+		"intro line",
+		"• first item that is",
+		"  long enough to",
+		"  wrap",
+		"  ◦ nested item that",
+		"    wraps too",
+		"12. numbered item",
+		"    wraps here",
+	}
+	if strings.Join(plain, "\n") != strings.Join(want, "\n") {
+		t.Errorf("got\n%s\nwant\n%s", strings.Join(plain, "\n"), strings.Join(want, "\n"))
 	}
 }
