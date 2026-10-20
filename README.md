@@ -10,6 +10,9 @@ app-level token (`xapp-`) for live events over Socket Mode. Go + Bubble Tea.
 3. `go build -o slack-tui . && ./slack-tui login` — paste both tokens; they go into the system keyring.
 4. `./slack-tui doctor` checks access (read-only), `./slack-tui` starts the client.
 
+The manifest asks for `users:read.email` so profiles can show email addresses; an app created before
+it was added needs the scope added (OAuth & Permissions) and a reinstall, else profiles just leave email out.
+
 Only one copy can run at a time: Socket Mode splits events between open connections, so a second
 copy would make both miss messages.
 
@@ -76,7 +79,7 @@ expires = "until tomorrow"
 
 | key | |
 |---|---|
-| `ctrl+k` / `space` | jump to conversation |
+| `ctrl+k` / `space` | jump to conversation; typing a name also finds people you have no DM with yet, and `enter` starts one |
 | `j` `k`, `g` `G`, `ctrl+d` `ctrl+u` | move |
 | `h` `l`, `tab` | move between sidebar / messages / thread |
 | `enter` | open conversation, or open the selected message's thread |
@@ -86,6 +89,7 @@ expires = "until tomorrow"
 | `ctrl+b` / `alt+i` (insert mode) | bold / italic the word at the cursor (again to undo; with no word, starts a `**` pair). `[label](https://…)` is sent as a link |
 | paste an image, `ctrl+v` | attach the clipboard image (repeat for up to 10 in one message); `enter` uploads it with the typed text, `ctrl+x` drops it (insert mode) |
 | `ctrl+s` (insert mode) | send later: opens `:later ` for a time (below) |
+| `ctrl+o` (insert mode, thread) | also send the reply to the channel, like Slack's checkbox (the bar above the box shows it; files stay in the thread) |
 | `:ta` `@an` `#de` (insert mode) | complete emoji, people (also @here/@channel/@everyone) and channels: `tab`/`enter` inserts, `↑` `↓` choose, `esc` closes. People and channels are sent as real mentions |
 | `esc` | back to normal mode |
 | `/` | search messages: Slack's own query syntax (`from:@anna in:#dev after:2026-01-01 "exact words"`); typing `@`, `#` or a name after `from:`/`in:` suggests people and channels (Slack's search matches handles, not display names, so pick from the list); `enter` goes to the message (its thread for replies), `o` opens it in Slack |
@@ -93,6 +97,8 @@ expires = "until tomorrow"
 | `:` | command line (below): `tab` completes, `↑` `↓` history, `esc` leaves |
 | `u` | next unread conversation |
 | `r` | mark conversation read |
+| `U` | mark unread from the selected message: the read marker moves to just before it, in Slack too, until you read to the bottom or open it again (not for thread replies: the API can't) |
+| `I` | profile of the message's sender, or of the DM's person in the sidebar: name, title, pronouns, status, local time and how far ahead or behind, email, phone; `enter` writes to them, `c` copies the email (also `:profile @person`) |
 | `c` | copy the selected message's text (OSC 52, so it works through tmux and ssh) |
 | `+` | react: emoji picker (enter adds, or removes a reaction you already have) |
 | `e` / `↑` in an empty input | edit your message / your last message (enter saves, esc cancels) |
@@ -120,6 +126,9 @@ expires = "until tomorrow"
 | `:leave` / `:leave #name` | leave this channel (or the one named), after a y/n |
 | `:create [--private] name` | make a channel (lower-cased, spaces become dashes) and open it |
 | `:invite @person …` | add people to this channel; tab completes handles |
+| `:dm @person …` | open the DM with someone, or the group DM with several, starting it if there is none |
+| `:members` | who is in this conversation, filtered as you type; `enter` shows a profile |
+| `:profile [@person]` | a person's profile (alone: the person of the open DM) |
 | `:bookmark link [title]` | add a link to the conversation's bookmarks (`https://` is added when left out; no title means the link is the title) |
 | `:away` / `:back` | show as away / let Slack decide again |
 
@@ -135,7 +144,7 @@ finished loading while the pane was hidden get sent again when it is shown. `sla
 whether images are on and tests a thumbnail download. The user token is only ever sent to `https://*.slack.com`.
 Opened files are cached in `~/.cache/slack-tui/files/`.
 
-Custom emoji are drawn as images too, two cells wide, fetched from Slack's public emoji CDN
+Custom emoji are drawn as images too, two cells wide (animated ones play), fetched from Slack's public emoji CDN
 (`*.slack-edge.com`, no token sent) and cached in `~/.cache/slack-tui/emoji/`.
 
 ## Cache
