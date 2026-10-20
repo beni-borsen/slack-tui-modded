@@ -22,7 +22,7 @@ func TestHelpFilter(t *testing.T) {
 		t.Fatal("? should open the help")
 	}
 	v := dump(t, m)
-	if !strings.Contains(v, "jump to conversation") || !strings.Contains(v, "of ") {
+	if !strings.Contains(v, "jump to a conversation") || !strings.Contains(v, "of ") {
 		t.Error("the full list should show, scrolling")
 	}
 

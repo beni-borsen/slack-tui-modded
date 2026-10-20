@@ -14,7 +14,7 @@ import (
 // finds what it does; words find keys ("pin", "thread").
 
 var helpKeys = [][2]string{
-	{"ctrl+k / space", "jump to conversation"},
+	{"ctrl+k / space", "jump to a conversation, or a person to start one with"},
 	{"j k  ↑ ↓", "move"},
 	{"g G", "top / bottom"},
 	{"ctrl+d ctrl+u", "half page"},

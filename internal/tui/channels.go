@@ -179,7 +179,7 @@ func (m *Model) argCompletion(text string) (cp *completion, ok bool, load tea.Cm
 			return nil, true, nil
 		}
 		items = m.matchChannels(strings.TrimPrefix(word, "#"))
-	case "invite":
+	case "invite", "dm":
 		for _, it := range m.matchPeople(strings.TrimPrefix(word, "@")) {
 			id := strings.TrimSuffix(strings.TrimPrefix(it.token, "<@"), ">")
 			u, isUser := m.users[id]

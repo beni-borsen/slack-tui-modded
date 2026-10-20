@@ -17,6 +17,9 @@ type switcher struct {
 	labels  []string
 	matches []string // ids matching the query, best first
 	sel     int
+	// convCount: ids past it are people we have no DM with
+	// (personPrefix+user ID), offered only once something is typed.
+	convCount int
 }
 
 func (m *Model) newSwitcher() *switcher {
@@ -39,6 +42,7 @@ func (m *Model) newSwitcher() *switcher {
 			s.labels = append(s.labels, label)
 		}
 	}
+	m.switcherPeople(s)
 	s.filter()
 	return s
 }
@@ -47,7 +51,7 @@ func (s *switcher) filter() {
 	q := strings.TrimSpace(s.input.Value())
 	s.matches = s.matches[:0]
 	if q == "" {
-		s.matches = append(s.matches, s.ids...)
+		s.matches = append(s.matches, s.ids[:s.convCount]...)
 	} else {
 		for _, i := range fuzzyRank(q, s.labels) {
 			s.matches = append(s.matches, s.ids[i])
@@ -65,6 +69,9 @@ func (m *Model) switcherKey(k tea.KeyMsg) tea.Cmd {
 	case "enter":
 		m.switcher = nil
 		if len(s.matches) > 0 {
+			if uid, ok := strings.CutPrefix(s.matches[s.sel], personPrefix); ok {
+				return m.openDMWith([]string{uid})
+			}
 			return m.open(s.matches[s.sel])
 		}
 		return nil
@@ -100,7 +107,13 @@ func (m *Model) renderSwitcher(width, height int) string {
 		id := s.matches[i]
 		label := unreadsIcon + " Unreads"
 		unread := false
-		if c := m.convs[id]; c != nil {
+		if uid, ok := strings.CutPrefix(id, personPrefix); ok {
+			u := m.users[uid]
+			label = userIcon + " " + u.Label()
+			if u.RealName != "" && u.RealName != u.Label() {
+				label += sFaint.Render("  " + u.RealName)
+			}
+		} else if c := m.convs[id]; c != nil {
 			icon := "#"
 			switch c.Kind {
 			case backend.KindDM:
