@@ -25,6 +25,7 @@ var helpKeys = [][2]string{
 	{"alt+enter ctrl+j", "new line"},
 	{"ctrl+v  (insert)", "attach clipboard image (again for more)"},
 	{"ctrl+b alt+i  (insert)", "bold / italic the word at the cursor"},
+	{"ctrl+o  (insert, thread)", "also send the reply to the channel"},
 	{"ctrl+s  (insert)", "send later: :later 30m / 15:30 / tomorrow / fri 9"},
 	{":ta @an #de  (insert)", "complete emoji, people, channels"},
 	{"esc", "back to normal mode"},

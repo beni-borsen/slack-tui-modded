@@ -370,6 +370,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Show it right away; the live event replaces it by timestamp.
 		mine := backend.Message{TS: msg.ts, ThreadTS: msg.threadTS, User: m.client.SelfID, Text: msg.text}
+		if msg.broadcast {
+			mine.SubType = "thread_broadcast"
+		}
 		m.applyMessage(msg.id, mine)
 		return m, nil
 

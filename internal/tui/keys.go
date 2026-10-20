@@ -397,6 +397,12 @@ func (m *Model) insertKey(k tea.KeyMsg) tea.Cmd {
 		return m.paste("", true)
 	case k.Type == tea.KeyCtrlS && m.editing == nil:
 		return m.laterFromInsert()
+	case k.Type == tea.KeyCtrlO && m.editing == nil:
+		if _, thread := m.inputTarget(); thread == "" {
+			return m.setStatus("ctrl+o is for thread replies: also send to the channel", false)
+		}
+		m.broadcast = !m.broadcast
+		return nil
 	case k.Type == tea.KeyCtrlB:
 		m.toggleMark('*')
 		return nil
@@ -436,12 +442,17 @@ func (m *Model) insertKey(k tea.KeyMsg) tea.Cmd {
 		if l := m.lists[conv]; l != nil && thread == "" {
 			l.sel = -1
 		}
+		broadcast := m.broadcast && thread != ""
+		m.broadcast = false
 		if atts := m.attach; len(atts) > 0 {
 			m.attach = nil
-			return tea.Batch(m.upload(conv, thread, atts, render.Encode(text, m.composeTokens)),
-				m.setStatus(plural(len(atts), "uploading 1 image…", fmt.Sprintf("uploading %d images…", len(atts))), false))
+			status := plural(len(atts), "uploading 1 image…", fmt.Sprintf("uploading %d images…", len(atts)))
+			if broadcast {
+				status += " (only in the thread: Slack can't send files to the channel too)"
+			}
+			return tea.Batch(m.upload(conv, thread, atts, render.Encode(text, m.composeTokens)), m.setStatus(status, false))
 		}
-		return m.post(conv, thread, render.Encode(text, m.composeTokens))
+		return m.post(conv, thread, render.Encode(text, m.composeTokens), broadcast)
 	}
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(k)

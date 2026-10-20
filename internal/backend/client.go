@@ -215,8 +215,9 @@ func (c *Client) Replies(ctx context.Context, id, threadTS string) ([]Message, e
 	}
 }
 
-// Post sends a message as the user, into a thread when threadTS is set.
-func (c *Client) Post(ctx context.Context, id, text, threadTS string) (string, error) {
+// Post sends a message as the user, into a thread when threadTS is set;
+// broadcast also shows the reply in the channel.
+func (c *Client) Post(ctx context.Context, id, text, threadTS string, broadcast bool) (string, error) {
 	opts := []slack.MsgOption{slack.MsgOptionLinkNames(true)}
 	if blocks := listBlocks(text); blocks != nil {
 		opts = append(opts, slack.MsgOptionText(listFallback(text), false), slack.MsgOptionBlocks(blocks...))
@@ -225,6 +226,9 @@ func (c *Client) Post(ctx context.Context, id, text, threadTS string) (string, e
 	}
 	if threadTS != "" {
 		opts = append(opts, slack.MsgOptionTS(threadTS))
+		if broadcast {
+			opts = append(opts, slack.MsgOptionBroadcast())
+		}
 	}
 	var ts string
 	err := retry(ctx, func() (err error) {

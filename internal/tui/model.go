@@ -101,6 +101,7 @@ type Model struct {
 	extUsers    map[string]bool // people from other organisations
 	opener      *opener         // what `o` opens, when a message has several
 	attach      []*attachment   // clipboard images going out with the next send
+	broadcast   bool            // thread replies also go to the channel (ctrl+o)
 
 	switcher *switcher
 	search   *searchState  // `/`; nil until first used
@@ -250,6 +251,7 @@ type sinceMsg struct {
 
 type postedMsg struct {
 	id, threadTS, ts, text string
+	broadcast              bool
 	err                    error
 }
 
@@ -403,10 +405,10 @@ func (m *Model) loadSince(id string) tea.Cmd {
 	}
 }
 
-func (m *Model) post(id, threadTS, text string) tea.Cmd {
+func (m *Model) post(id, threadTS, text string, broadcast bool) tea.Cmd {
 	return func() tea.Msg {
-		ts, err := m.client.Post(m.ctx, id, text, threadTS)
-		return postedMsg{id: id, threadTS: threadTS, ts: ts, text: text, err: err}
+		ts, err := m.client.Post(m.ctx, id, text, threadTS, broadcast)
+		return postedMsg{id: id, threadTS: threadTS, ts: ts, text: text, broadcast: broadcast, err: err}
 	}
 }
 

@@ -51,7 +51,7 @@ func quickSend(target string, words []string, dry bool) error {
 		fmt.Printf("would send to %s: %q\n", where, render.Encode(text, nil))
 		return nil
 	}
-	if _, err := c.Post(ctx, convID, render.Encode(text, nil), ""); err != nil {
+	if _, err := c.Post(ctx, convID, render.Encode(text, nil), "", false); err != nil {
 		return err
 	}
 	fmt.Printf("sent to %s\n", where)

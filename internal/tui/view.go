@@ -171,20 +171,48 @@ func (m *Model) renderInput(w int, isTarget bool, hint string) string {
 	}
 	m.input.SetWidth(w - 2)
 	m.fitInput() // the width may have changed, and with it the wrapping
+	// Labels go into the rule above the box: "── editing … ── image … ──".
+	var labels []string
+	if m.editing != nil {
+		labels = append(labels, sWarn.Render(" editing · enter save · esc cancel "))
+	}
+	if label := m.broadcastLabel(); label != "" {
+		if m.broadcast {
+			labels = append(labels, sWarn.Render(label))
+		} else {
+			labels = append(labels, sFaint.Render(label))
+		}
+	}
+	if label := m.attachLabel(); label != "" {
+		labels = append(labels, sWarn.Render(label))
+	}
 	top := rule(w, true)
+	if len(labels) > 0 {
+		bar := sBar.Render("──") + strings.Join(labels, sBar.Render("──"))
+		top = ansi.Truncate(bar+sBar.Render(strings.Repeat("─", max(0, w-lipgloss.Width(bar)))), w, "")
+	}
 	if m.complete != nil {
 		top = strings.Join(m.renderCompletion(w), "\n") + "\n" + top
 	}
-	if m.editing != nil {
-		label := " editing · enter save · esc cancel "
-		bar := sBar.Render("──") + sWarn.Render(label) + sBar.Render(strings.Repeat("─", max(0, w-2-lipgloss.Width(label))))
-		top = strings.TrimSuffix(top, rule(w, true)) + bar
-	}
-	if label := m.attachLabel(); label != "" {
-		bar := sBar.Render("──") + sWarn.Render(label) + sBar.Render(strings.Repeat("─", max(0, w-2-lipgloss.Width(label))))
-		top = strings.TrimSuffix(top, rule(w, true)) + bar
-	}
 	return top + "\n" + indent(m.input.View(), "  ")
+}
+
+// broadcastLabel is the bar above a thread reply being written: whether it
+// also goes to the channel, as Slack's checkbox.
+func (m *Model) broadcastLabel() string {
+	conv, thread := m.inputTarget()
+	c := m.convs[conv]
+	if thread == "" || c == nil || m.editing != nil {
+		return ""
+	}
+	where := "#" + c.Name
+	if c.IsDM() {
+		where = "the conversation"
+	}
+	if m.broadcast {
+		return " also sending to " + where + " · ctrl+o undo "
+	}
+	return " ctrl+o also send to " + where + " "
 }
 
 func indent(s, prefix string) string {
