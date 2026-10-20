@@ -113,6 +113,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case invitedMsg:
 		return m, m.invitedResult(msg)
 
+	case membersMsg:
+		return m, m.membersResult(msg)
+
 	case profileMsg:
 		return m, m.profileResult(msg)
 

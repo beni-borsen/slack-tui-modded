@@ -53,6 +53,9 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 	if m.profile != nil {
 		return m.profileKey(k)
 	}
+	if m.members != nil {
+		return m.membersKey(k)
+	}
 	if m.sched != nil {
 		return m.schedKey(k)
 	}

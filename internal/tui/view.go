@@ -54,6 +54,8 @@ func (m *Model) View() string {
 		main = m.renderScheduled(mainW, h)
 	case m.chans != nil:
 		main = m.renderChans(mainW, h)
+	case m.members != nil:
+		main = m.renderMembers(mainW, h)
 	case m.shared != nil:
 		main = m.renderShared(mainW, h)
 	case m.current == unreadsID:

@@ -73,7 +73,7 @@ func (m *Model) openShared() tea.Cmd {
 		return m.setStatus("open a conversation first", false)
 	}
 	m.closeSearch()
-	m.pins, m.sched, m.chans = nil, nil, nil
+	m.pins, m.sched, m.chans, m.members = nil, nil, nil, nil
 	m.shared = &sharedState{conv: m.current}
 	return tea.Batch(m.loadSharedFiles(1), m.loadSharedLinks(1))
 }

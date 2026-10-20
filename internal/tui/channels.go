@@ -78,7 +78,7 @@ func (m *Model) cmdJoin(arg string) tea.Cmd {
 	ti.CharLimit = 80
 	ti.SetValue(name)
 	m.closeSearch()
-	m.pins, m.sched, m.shared = nil, nil, nil
+	m.pins, m.sched, m.shared, m.members = nil, nil, nil, nil
 	m.insert = false
 	m.input.Blur()
 	m.chans = &chansState{input: ti, autoJoin: name}

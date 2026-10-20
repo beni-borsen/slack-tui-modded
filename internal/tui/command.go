@@ -37,6 +37,8 @@ var commands = []command{
 		func(m *Model, a string) tea.Cmd { return m.cmdDM(a) }},
 	{"profile", "[@person]", "a person's profile: title, local time, email (I)",
 		func(m *Model, a string) tea.Cmd { return m.cmdProfile(a) }},
+	{"members", "", "who is in this conversation; enter shows a profile",
+		func(m *Model, _ string) tea.Cmd { return m.openMembers() }},
 	{"join", "[#channel]", "join a public channel; alone browses them all",
 		func(m *Model, a string) tea.Cmd { return m.cmdJoin(a) }},
 	{"leave", "[#channel]", "leave this channel (or the one named)",

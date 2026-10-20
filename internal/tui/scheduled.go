@@ -240,7 +240,7 @@ func (m *Model) scheduledResult(msg scheduledMsg) tea.Cmd {
 
 func (m *Model) openScheduled() tea.Cmd {
 	m.closeSearch()
-	m.pins, m.shared, m.chans = nil, nil, nil
+	m.pins, m.shared, m.chans, m.members = nil, nil, nil, nil
 	m.insert = false
 	m.input.Blur()
 	m.sched = &schedState{loading: true}

@@ -115,6 +115,7 @@ type Model struct {
 	jump     *jumpState    // search result being loaded into view
 	help     *helpState    // `?`, while open
 	profile  *profileState // `I`: a person's profile card, while open
+	members  *membersState // `:members`, while open
 
 	booted      bool
 	fromCache   bool // drawn from the cache; the API hasn't answered yet
