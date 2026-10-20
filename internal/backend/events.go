@@ -67,7 +67,8 @@ type EvEmojiChanged struct{}
 func (c *Client) Listen(ctx context.Context, out chan<- any) {
 	sm := socketmode.New(c.api, socketmode.OptionLog(log.New(io.Discard, "", 0)))
 	go func() {
-		if err := sm.RunContext(ctx); err != nil && ctx.Err() == nil {
+		// RunContext always ends with an error; it only matters while we still want events.
+		if err := sm.RunContext(ctx); ctx.Err() == nil {
 			send(ctx, out, EvConnection{State: "error", Err: err})
 		}
 	}()

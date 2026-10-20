@@ -103,7 +103,7 @@ func parseLater(args string, now time.Time) (time.Time, error) {
 		return time.Time{}, errors.New("that time has passed")
 	}
 	if t.Sub(now) > maxSchedule {
-		return time.Time{}, errors.New("Slack schedules at most 120 days ahead")
+		return time.Time{}, errors.New("at most 120 days ahead (Slack's limit)")
 	}
 	return t, nil
 }

@@ -3,6 +3,14 @@
 Slack in the terminal, using an official Slack app: a user token (`xoxp-`) for the Web API and an
 app-level token (`xapp-`) for live events over Socket Mode. Go + Bubble Tea.
 
+## Requirements
+
+- Go 1.26 to build it; Linux (it opens files with `xdg-open`).
+- A system keyring for the tokens (GNOME Keyring / KWallet via Secret Service), or `SLACK_USER_TOKEN` and
+  `SLACK_APP_TOKEN` in the environment.
+- A [Nerd Font](https://www.nerdfonts.com) in the terminal for the sidebar icons.
+- Optional: ghostty or kitty for inline images (below), `wl-paste` or `xclip` to paste images.
+
 ## Setup
 
 1. Create the app at api.slack.com/apps → *From a manifest* (see `manifest.yaml`), install it to the workspace.
