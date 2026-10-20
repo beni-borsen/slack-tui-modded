@@ -76,6 +76,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				st.status, st.err = imgFailed, msg.err.Error()
 			} else {
 				st.status, st.png, st.cols, st.rows = imgReady, msg.png, 2, 1
+				if msg.anim != nil {
+					st.anim = msg.anim // its other frames go up once it is on screen
+					return m, m.startAnims()
+				}
 			}
 		}
 		return m, nil

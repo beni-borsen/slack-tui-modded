@@ -161,3 +161,54 @@ func TestViewerAnim(t *testing.T) {
 		t.Error("closing should free the frames")
 	}
 }
+
+func TestAnimatedEmoji(t *testing.T) {
+	// 40×20 source into a 2×1 box of 8×16 cells: 16×16 px, fitted at 16×8
+	// and centred, the rest left clear.
+	a, err := decodeEmojiAnim(testGIF(t, 3, gif.DisposalNone), 8, 16)
+	if err != nil || len(a.frames) != 3 {
+		t.Fatalf("%v, %d frames", err, len(a.frames))
+	}
+	img, _ := png.Decode(bytes.NewReader(a.frames[0]))
+	if img.Bounds() != image.Rect(0, 0, 16, 16) {
+		t.Fatalf("frames should be exactly the 2×1 box, got %v", img.Bounds())
+	}
+	if _, _, _, alpha := img.At(2, 1).RGBA(); alpha != 0 {
+		t.Error("above the picture should stay clear")
+	}
+	if _, _, _, alpha := img.At(2, 5).RGBA(); alpha == 0 {
+		t.Error("the picture should be centred")
+	}
+	if _, err := decodeEmojiAnim(testGIF(t, 1, 0), 8, 16); err != errNotAnimated {
+		t.Errorf("one frame: %v", err)
+	}
+
+	m := fakeModel(t, 100, 24)
+	tty, _ := os.CreateTemp(t.TempDir(), "tty")
+	m.SetGraphics(kitty.NewWriter(tty, false), "")
+	st := &imgState{id: 9}
+	m.emojiImgs["partyparrot"] = st
+	m.Update(emojiImgMsg{name: "partyparrot", png: a.frames[0], anim: a})
+	if st.anim == nil || !m.animating || st.cols != 2 || st.rows != 1 {
+		t.Fatalf("an animated emoji should start the tick: %+v", st)
+	}
+	m.viewSeq = 3
+	if _, ok := m.EmojiImage("partyparrot"); !ok || st.seen != 3 {
+		t.Fatal("drawing the emoji should count it as on screen")
+	}
+	m.stepAnims(time.Now())
+	if len(st.ids) != 3 {
+		t.Fatalf("on screen: its frames should go up, ids %v", st.ids)
+	}
+	m.Update(framesUploadedMsg{st: st})
+	now := time.Now()
+	m.stepAnims(now)
+	m.EmojiImage("partyparrot")
+	m.stepAnims(now.Add(60 * time.Millisecond))
+	if got, _ := m.EmojiImage("partyparrot"); got != kitty.Inline(st.ids[1], 2) {
+		t.Error("the emoji should show its second frame after 60ms")
+	}
+	if !isGIF("https://emoji.slack-edge.com/T1/party/abc.GIF?x=1") || isGIF("https://emoji.slack-edge.com/T1/ok/abc.png") {
+		t.Error("isGIF")
+	}
+}

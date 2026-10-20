@@ -19,10 +19,11 @@ import (
 // nothing more is sent per frame.
 
 const (
-	maxViewAnimBytes = 48 << 20 // the full-window viewer's frames
-	maxAnimFrames    = 200
-	maxAnimPixels    = 100_000_000 // width × height × frames of the source
-	maxAnimBytes     = 16 << 20    // all scaled frames, as PNG
+	maxViewAnimBytes  = 48 << 20 // the full-window viewer's frames
+	maxAnimFrames     = 200
+	maxAnimPixels     = 100_000_000 // width × height × frames of the source
+	maxAnimBytes      = 16 << 20    // all scaled frames, as PNG
+	maxEmojiAnimBytes = 1 << 20     // the frames of one custom emoji
 )
 
 type animFrames struct {
@@ -49,6 +50,38 @@ func scaleAnim(data []byte, cw, ch, maxCols, maxRows int) (*animFrames, int, int
 // images are: at full-window size its frames are far too much to make and
 // send (live: 150MB and 20s for a 142-frame GIF).
 func decodeAnim(data []byte, cw, ch, maxCols, maxRows int, maxBytes int) (*animFrames, int, int, error) {
+	g, w, h, err := decodeGIF(data)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	cols, rows := fitCells(w, h, cw, ch, maxCols, maxRows)
+	box := image.Rect(0, 0, max(cols*cw, 1), max(rows*ch, 1))
+	a, err := gifFrames(g, w, h, box, box, maxBytes)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	return a, cols, rows, nil
+}
+
+// decodeEmojiAnim decodes an animated custom emoji into frames of exactly
+// its 2×1 cell box, the picture kept in shape and centred in it.
+func decodeEmojiAnim(data []byte, cw, ch int) (*animFrames, error) {
+	g, w, h, err := decodeGIF(data)
+	if err != nil {
+		return nil, err
+	}
+	box := image.Rect(0, 0, 2*cw, ch)
+	dw, dh := box.Dx(), box.Dx()*h/w
+	if dh > box.Dy() {
+		dw, dh = box.Dy()*w/h, box.Dy()
+	}
+	at := image.Rect(0, 0, max(dw, 1), max(dh, 1)).Add(image.Pt((box.Dx()-dw)/2, (box.Dy()-dh)/2))
+	return gifFrames(g, w, h, box, at, maxEmojiAnimBytes)
+}
+
+// decodeGIF decodes an animated GIF and its size; errNotAnimated when it
+// has one frame.
+func decodeGIF(data []byte) (*gif.GIF, int, int, error) {
 	cfg, err := gif.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
 		return nil, 0, 0, err
@@ -69,8 +102,12 @@ func decodeAnim(data []byte, cw, ch, maxCols, maxRows int, maxBytes int) (*animF
 	if w <= 0 || h <= 0 || n > maxAnimFrames || w*h*n > maxAnimPixels {
 		return nil, 0, 0, errors.New("animation too large")
 	}
-	cols, rows := fitCells(w, h, cw, ch, maxCols, maxRows)
-	dw, dh := cols*cw, rows*ch
+	return g, w, h, nil
+}
+
+// gifFrames draws each frame of g (w×h) scaled into the rectangle at of a
+// box-sized picture, as PNG.
+func gifFrames(g *gif.GIF, w, h int, box, at image.Rectangle, maxBytes int) (*animFrames, error) {
 	canvas := image.NewRGBA(image.Rect(0, 0, w, h))
 	out := &animFrames{}
 	total := 0
@@ -87,14 +124,14 @@ func decodeAnim(data []byte, cw, ch, maxCols, maxRows int, maxBytes int) (*animF
 		}
 		draw.Draw(canvas, frame.Bounds(), frame, frame.Bounds().Min, draw.Over)
 
-		dst := image.NewRGBA(image.Rect(0, 0, max(dw, 1), max(dh, 1)))
-		draw.ApproxBiLinear.Scale(dst, dst.Bounds(), canvas, canvas.Bounds(), draw.Src, nil)
+		dst := image.NewRGBA(box)
+		draw.ApproxBiLinear.Scale(dst, at, canvas, canvas.Bounds(), draw.Src, nil)
 		var buf bytes.Buffer
 		if err := enc.Encode(&buf, dst); err != nil {
-			return nil, 0, 0, err
+			return nil, err
 		}
 		if total += buf.Len(); total > maxBytes {
-			return nil, 0, 0, errors.New("animation too large")
+			return nil, errors.New("animation too large")
 		}
 		out.frames = append(out.frames, buf.Bytes())
 		// Like browsers: no delay, or a tiny one, means 100ms.
@@ -111,7 +148,7 @@ func decodeAnim(data []byte, cw, ch, maxCols, maxRows int, maxBytes int) (*animF
 			canvas = saved
 		}
 	}
-	return out, cols, rows, nil
+	return out, nil
 }
 
 // startAnims starts the tick, once, when an animated image is ready.
@@ -147,13 +184,26 @@ func (m *Model) uploadFrames(st *imgState) tea.Cmd {
 	}
 }
 
+// animated is every image that animates: files and custom emoji.
+func (m *Model) animated() []*imgState {
+	var out []*imgState
+	for _, set := range []map[string]*imgState{m.images, m.emojiImgs} {
+		for _, st := range set {
+			if st.anim != nil {
+				out = append(out, st)
+			}
+		}
+	}
+	return out
+}
+
 // stepAnims moves each animation that was in the last view on to its next
 // frame when due, and books the next tick. With nothing animated left, the
 // tick stops.
 func (m *Model) stepAnims(now time.Time) tea.Cmd {
 	next, any := time.Second/2, false
 	var uploads []tea.Cmd
-	for _, st := range m.images {
+	for _, st := range m.animated() {
 		a := st.anim
 		if a == nil || st.status != imgReady {
 			continue

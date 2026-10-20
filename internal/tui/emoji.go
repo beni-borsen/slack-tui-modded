@@ -16,11 +16,13 @@ import (
 )
 
 // Custom emoji are drawn as small images, two cells wide like ordinary
-// emoji, once they have loaded.
+// emoji, once they have loaded. Animated ones (GIFs) play like animated
+// images in messages.
 
 type emojiImgMsg struct {
 	name string
 	png  []byte
+	anim *animFrames // nil for a still emoji
 	err  error
 }
 
@@ -30,7 +32,8 @@ func (m *Model) EmojiImage(name string) (string, bool) {
 		return "", false
 	}
 	if st := m.emojiImgs[name]; st != nil && st.status == imgReady {
-		return kitty.Inline(st.id, 2), true
+		st.seen = m.viewSeq
+		return kitty.Inline(st.shownID(), 2), true
 	}
 	return "", false
 }
@@ -114,7 +117,11 @@ func (m *Model) fetchEmoji(name, url string, id uint32) tea.Cmd {
 		defer func() { <-m.imgSem }()
 
 		sum := sha256.Sum256([]byte(url))
-		path := filepath.Join(cacheDir(), "emoji", hex.EncodeToString(sum[:12])+".png")
+		base := filepath.Join(cacheDir(), "emoji", hex.EncodeToString(sum[:12]))
+		if isGIF(url) {
+			return m.fetchEmojiGIF(name, url, base+".gif", id, cw, ch)
+		}
+		path := base + ".png"
 		pngData, err := os.ReadFile(path)
 		if err != nil {
 			raw, err := backend.DownloadEmoji(m.ctx, url)
@@ -133,6 +140,40 @@ func (m *Model) fetchEmoji(name, url string, id uint32) tea.Cmd {
 		}
 		return emojiImgMsg{name: name, png: pngData}
 	}
+}
+
+// fetchEmojiGIF loads a GIF emoji. The GIF itself is cached, since the
+// frames depend on the cell size; one with a single frame is a still.
+func (m *Model) fetchEmojiGIF(name, url, path string, id uint32, cw, ch int) tea.Msg {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if raw, err = backend.DownloadEmoji(m.ctx, url); err != nil {
+			return emojiImgMsg{name: name, err: err}
+		}
+		if os.MkdirAll(filepath.Dir(path), 0o700) == nil {
+			os.WriteFile(path, raw, 0o600)
+		}
+	}
+	a, err := decodeEmojiAnim(raw, cw, ch)
+	if err != nil {
+		pngData, _, _, err := fitImage(raw, cw, ch, 2, 1)
+		if err != nil {
+			return emojiImgMsg{name: name, err: err}
+		}
+		if err := m.gfx.Show(id, pngData, 2, 1); err != nil {
+			return emojiImgMsg{name: name, err: err}
+		}
+		return emojiImgMsg{name: name, png: pngData}
+	}
+	if err := m.gfx.Show(id, a.frames[0], 2, 1); err != nil {
+		return emojiImgMsg{name: name, err: err}
+	}
+	return emojiImgMsg{name: name, png: a.frames[0], anim: a}
+}
+
+func isGIF(rawURL string) bool {
+	path, _, _ := strings.Cut(rawURL, "?")
+	return strings.HasSuffix(strings.ToLower(path), ".gif")
 }
 
 // sectionIcon is a section header's emoji, or "" while a custom one loads.
