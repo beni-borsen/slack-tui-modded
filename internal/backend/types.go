@@ -59,6 +59,10 @@ type User struct {
 	StatusEmoji   string
 	StatusText    string
 	StatusExpires int64
+	// For the profile card. Email needs the users:read.email scope.
+	Title, Pronouns, Email, Phone string
+	TZLabel                       string // "Central European Summer Time"
+	TZOffset                      int    // seconds east of UTC, now
 }
 
 // Status is the person's custom status, or empty strings once it has

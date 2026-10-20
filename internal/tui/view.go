@@ -42,6 +42,8 @@ func (m *Model) View() string {
 		main = lipgloss.Place(mainW, h, lipgloss.Center, lipgloss.Top, "\n\n"+m.renderPicker(mainW, h))
 	case m.opener != nil:
 		main = lipgloss.Place(mainW, h, lipgloss.Center, lipgloss.Top, "\n\n"+m.renderOpener(mainW))
+	case m.profile != nil:
+		main = lipgloss.Place(mainW, h, lipgloss.Center, lipgloss.Top, "\n\n"+m.renderProfile(mainW))
 	case m.help != nil:
 		main = lipgloss.Place(mainW, h, lipgloss.Center, lipgloss.Top, "\n"+m.renderHelp(mainW, h-1))
 	case m.search != nil && m.search.open:

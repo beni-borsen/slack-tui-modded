@@ -50,6 +50,9 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 	if m.opener != nil {
 		return m.openerKey(k)
 	}
+	if m.profile != nil {
+		return m.profileKey(k)
+	}
 	if m.sched != nil {
 		return m.schedKey(k)
 	}
@@ -153,6 +156,8 @@ func (m *Model) sidebarKey(k tea.KeyMsg) tea.Cmd {
 		m.moveSide(-10)
 	case "z":
 		return m.toggleFold()
+	case "I":
+		return m.profileFromSidebar()
 	case "enter", "l", "right":
 		if m.sideCur >= len(m.side) {
 			return nil
@@ -254,6 +259,8 @@ func (m *Model) listKey(k tea.KeyMsg, l *msgList, inThread bool) tea.Cmd {
 		return m.openFrom(l.msgs[sel])
 	case "s":
 		return m.saveFiles(l.msgs[sel].Files)
+	case "I":
+		return m.profileOfMessage(l.msgs[sel])
 	case "U":
 		if inThread {
 			return m.setStatus("Slack's API can't mark thread replies unread", false)

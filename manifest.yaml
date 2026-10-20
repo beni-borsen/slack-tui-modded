@@ -20,6 +20,7 @@ oauth_config:
       - reactions:read
       - reactions:write
       - users:read
+      - users:read.email
       - users:write
       - users.profile:read
       - users.profile:write

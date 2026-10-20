@@ -47,6 +47,7 @@ var helpKeys = [][2]string{
 	{"v", "view images full-window: ← → browse, o open, esc close"},
 	{"o", "open the message's file or link (a chooser when there are several)"},
 	{"s", "save the message's files to Downloads"},
+	{"I", "profile of the message's sender (or the DM's person)"},
 	{"x  (thread)", "close thread"},
 	{"q", "quit"},
 }

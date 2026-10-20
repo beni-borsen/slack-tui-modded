@@ -114,6 +114,7 @@ type Model struct {
 	bmEdit   *bookmarkEdit // the bookmark the :bookmark being run changes
 	jump     *jumpState    // search result being loaded into view
 	help     *helpState    // `?`, while open
+	profile  *profileState // `I`: a person's profile card, while open
 
 	booted      bool
 	fromCache   bool // drawn from the cache; the API hasn't answered yet

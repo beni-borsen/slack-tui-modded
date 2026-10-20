@@ -363,5 +363,7 @@ func fromUser(u slack.User) User {
 		ID: u.ID, Name: u.Name, DisplayName: u.Profile.DisplayName, RealName: real,
 		Deleted: u.Deleted, IsBot: u.IsBot, TZ: u.TZ, TeamID: u.TeamID,
 		StatusEmoji: u.Profile.StatusEmoji, StatusText: u.Profile.StatusText, StatusExpires: int64(u.Profile.StatusExpiration),
+		Title: u.Profile.Title, Pronouns: u.Profile.Pronouns, Email: u.Profile.Email, Phone: u.Profile.Phone,
+		TZLabel: u.TZLabel, TZOffset: u.TZOffset,
 	}
 }
