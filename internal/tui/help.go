@@ -33,6 +33,7 @@ var helpKeys = [][2]string{
 	{":", "command line (below); tab completes, ↑ ↓ history"},
 	{"u", "next unread conversation"},
 	{"r", "mark conversation read"},
+	{"U", "mark unread from the message"},
 	{"z  enter on header", "fold / unfold sidebar section"},
 	{"+", "react to the message"},
 	{"c", "copy the message text"},

@@ -3,6 +3,7 @@
 package backend
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -232,4 +233,16 @@ func splitTS(ts string) (int64, int64) {
 func TSTime(ts string) time.Time {
 	s, u := splitTS(ts)
 	return time.Unix(s, u*1000)
+}
+
+// TSBefore is the timestamp one microsecond before ts: a read marker
+// there leaves the message at ts unread.
+func TSBefore(ts string) string {
+	s, u := splitTS(ts)
+	if u == 0 {
+		s, u = s-1, 999999
+	} else {
+		u--
+	}
+	return fmt.Sprintf("%d.%06d", s, u)
 }

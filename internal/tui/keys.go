@@ -254,6 +254,12 @@ func (m *Model) listKey(k tea.KeyMsg, l *msgList, inThread bool) tea.Cmd {
 		return m.openFrom(l.msgs[sel])
 	case "s":
 		return m.saveFiles(l.msgs[sel].Files)
+	case "U":
+		if inThread {
+			return m.setStatus("Slack's API can't mark thread replies unread", false)
+		}
+		l.sel = sel // stay here, so following new messages doesn't read it again
+		return m.markUnread(m.current, l.msgs[sel])
 	}
 	sel = min(max(sel, 0), n-1)
 	if sel == n-1 {
@@ -320,6 +326,26 @@ func (m *Model) markSelectedRead() tea.Cmd {
 	cmd := m.markRead(id)
 	m.rebuildSidebar()
 	return cmd
+}
+
+// markUnread moves the read marker to just before msg, like Slack's
+// "Mark unread": the conversation is unread from msg on, until it is
+// opened again or read to the bottom.
+func (m *Model) markUnread(id string, msg backend.Message) tea.Cmd {
+	c := m.convs[id]
+	if c == nil {
+		return nil
+	}
+	ts := backend.TSBefore(msg.TS)
+	c.LastRead = ts
+	if backend.TSLess(c.Latest, msg.TS) {
+		c.Latest = msg.TS
+	}
+	delete(m.unreadMsgs, id) // the Unreads view fetches from the new marker
+	m.markSeq[id]++          // and a pending mark-read tick is void
+	m.list(id).newSince = ts
+	m.rebuildSidebar()
+	return tea.Batch(m.mark(id, ts), m.setStatus("marked unread from here", false))
 }
 
 // nextUnread opens the next unread conversation in sidebar order.
