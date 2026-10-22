@@ -464,6 +464,10 @@ func (m *Model) insertKey(k tea.KeyMsg) tea.Cmd {
 		}
 		return m.post(conv, thread, render.Encode(text, m.composeTokens), broadcast)
 	}
+	// Type into a box at full height, then shrink it to fit: a box still at
+	// its old height would scroll when the text wraps onto a new row, and
+	// growing it afterwards doesn't scroll back, hiding the first row.
+	m.input.SetHeight(m.inputLimit())
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(k)
 	m.fitInput()
@@ -475,8 +479,12 @@ func (m *Model) insertKey(k tea.KeyMsg) tea.Cmd {
 // up to 8 rows or a third of the window, whichever is less; past that the
 // box scrolls.
 func (m *Model) fitInput() {
-	limit := max(1, min(8, m.height/3))
-	m.input.SetHeight(min(max(m.inputRows(), 1), limit))
+	m.input.SetHeight(min(max(m.inputRows(), 1), m.inputLimit()))
+}
+
+// inputLimit is the most rows the input box grows to.
+func (m *Model) inputLimit() int {
+	return max(1, min(8, m.height/3))
 }
 
 // listConv is the conversation a message list belongs to.
