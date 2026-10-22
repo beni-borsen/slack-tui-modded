@@ -15,7 +15,7 @@ import (
 
 var helpKeys = [][2]string{
 	{"ctrl+k / space", "jump to a conversation, or a person to start one with"},
-	{"j k  ↑ ↓", "move"},
+	{"j k  ↑ ↓", "move; a message taller than the pane scrolls first"},
 	{"g G", "top / bottom"},
 	{"ctrl+d ctrl+u", "half page"},
 	{"h l  tab", "move between panes"},

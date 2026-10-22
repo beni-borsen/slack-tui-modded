@@ -52,6 +52,10 @@ func (m *Model) renderList(l *msgList, width, height int, active, inThread bool)
 		}
 		all = append(all, sFaint.Render(center(hint, width)))
 	}
+	selBar := sBarDim.Render("▌") + " "
+	if active {
+		selBar = sBar.Render("▌") + " "
+	}
 	var prev *backend.Message
 	for i := range l.msgs {
 		msg := &l.msgs[i]
@@ -71,11 +75,7 @@ func (m *Model) renderList(l *msgList, width, height int, active, inThread bool)
 
 		bar := "  "
 		if i == sel {
-			if active {
-				bar = sBar.Render("▌") + " "
-			} else {
-				bar = sBarDim.Render("▌") + " "
-			}
+			bar = selBar
 		}
 		all = append(all, pre...)
 		blocks[i].start = len(all)
@@ -86,32 +86,63 @@ func (m *Model) renderList(l *msgList, width, height int, active, inThread bool)
 		prev = msg
 	}
 
-	// Scroll: follow the bottom, or keep the selected block on screen.
+	// Scroll: follow the bottom, or keep the selected block on screen. A
+	// block taller than the pane keeps wherever j/k scrolled it to.
 	total := len(all)
 	maxTop := max(0, total-height)
-	if l.sel < 0 {
+	b := blocks[sel]
+	end := b.start + len(b.lines)
+	switch {
+	case l.sel < 0:
 		l.top = maxTop
-	} else {
-		b := blocks[sel]
-		end := b.start + len(b.lines)
+	case len(b.lines) > height:
+		l.top = min(max(l.top, b.start), end-height)
+		if sel == 0 && l.top == b.start {
+			l.top = 0
+		}
+	default:
 		if b.start < l.top {
 			l.top = b.start
 		}
 		if end > l.top+height {
-			l.top = max(b.start, end-height)
+			l.top = end - height
 		}
 		if sel == 0 {
 			l.top = 0 // show the "load older" hint and date line
 		}
 	}
 	l.top = min(max(l.top, 0), maxTop)
+	l.spans = l.spans[:0]
+	for _, b := range blocks {
+		l.spans = append(l.spans, span{b.start, len(b.lines)})
+	}
+	l.viewH, l.total = height, total
 
-	view := all[l.top:min(total, l.top+height)]
+	view := append([]string(nil), all[l.top:min(total, l.top+height)]...)
+	// A selected message cut off by the pane says so: its sender stays on
+	// the top row, and the bottom row counts the lines still below.
+	if height >= 4 && len(view) == height {
+		if above := l.top - b.start; above > 0 && end > l.top {
+			view[0] = selBar + m.stickyHead(l.msgs[sel], above+1, width-2)
+		}
+		if below := end - (l.top + height); below > 0 && b.start < l.top+height {
+			view[height-1] = selBar + sFaint.Render(fmt.Sprintf("↓ %d more %s", below+1, plural(below+1, "line", "lines")))
+		}
+	}
 	pad := make([]string, 0, height)
 	for range height - len(view) {
 		pad = append(pad, "")
 	}
 	return strings.Join(append(pad, view...), "\n")
+}
+
+// stickyHead stands in for the header of a message whose top has
+// scrolled out of view: who wrote it, when, and how much is above.
+func (m *Model) stickyHead(msg backend.Message, above, width int) string {
+	head := nameStyle(senderKey(msg)).Render(m.senderName(msg)) + "  " +
+		sTime.Render(msg.Time().Format(m.cfg.TimeFormat)) + "  " +
+		sFaint.Render(fmt.Sprintf("↑ %d more %s", above, plural(above, "line", "lines")))
+	return ansi.Truncate(head, width, "…")
 }
 
 // messageLines renders one message, wrapped to width.

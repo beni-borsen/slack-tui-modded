@@ -55,7 +55,17 @@ type msgList struct {
 	// newSince is the read marker when the conversation was opened; the
 	// "new" divider goes above the first message after it.
 	newSince string
+	// The layout of the last render, for keys that scroll by lines: where
+	// each message's lines are, the pane's height and the lines in all.
+	spans []span
+	viewH int
+	total int
 }
+
+// span is where one message's lines are in a rendered list.
+type span struct{ start, n int }
+
+func (s span) end() int { return s.start + s.n }
 
 type threadState struct {
 	conv string

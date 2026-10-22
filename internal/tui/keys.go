@@ -214,22 +214,28 @@ func (m *Model) listKey(k tea.KeyMsg, l *msgList, inThread bool) tea.Cmd {
 		sel = n - 1
 	}
 	var cmd tea.Cmd
+	follow := false // back at the bottom: follow new messages again
 	switch k.String() {
 	case "j", "down":
-		sel++
+		if !l.scrollIn(sel, l.lineStep()) {
+			sel++
+		}
 	case "k", "up":
+		if l.scrollIn(sel, -l.lineStep()) {
+			break
+		}
 		if sel == 0 && l.hasMore && !inThread {
 			cmd = m.loadHistory(m.current, true)
 		}
 		sel--
 	case "ctrl+d":
-		sel += 10
+		sel = l.page(sel, max(1, l.viewH/2))
 	case "ctrl+u":
-		sel -= 10
+		sel = l.page(sel, -max(1, l.viewH/2))
 	case "g", "home":
 		sel = 0
 	case "G", "end", "esc":
-		sel = n - 1
+		sel, follow = n-1, true
 	case "h", "left":
 		if inThread {
 			m.focus = fMessages
@@ -272,8 +278,10 @@ func (m *Model) listKey(k tea.KeyMsg, l *msgList, inThread bool) tea.Cmd {
 		return m.markUnread(m.current, l.msgs[sel])
 	}
 	sel = min(max(sel, 0), n-1)
-	if sel == n-1 {
-		l.sel = -1 // back at the bottom: follow new messages again
+	// The last message follows once its end is on screen; one taller than
+	// the pane is read from its top first.
+	if sel == n-1 && (follow || !l.tall(sel) || l.top+l.viewH >= l.spans[sel].end()) {
+		l.sel = -1
 		if !inThread {
 			cmd = tea.Batch(cmd, m.markRead(m.current))
 		}
@@ -281,6 +289,84 @@ func (m *Model) listKey(k tea.KeyMsg, l *msgList, inThread bool) tea.Cmd {
 		l.sel = sel
 	}
 	return cmd
+}
+
+// tall reports whether message i was taller than the pane at the last render.
+func (l *msgList) tall(i int) bool {
+	return i < len(l.spans) && l.spans[i].n > l.viewH
+}
+
+// lineStep is how far j/k scroll inside a tall message: a few lines, but
+// never past what the cut-off hints cover up, so no line is skipped.
+func (l *msgList) lineStep() int {
+	return max(1, min(3, l.viewH-2))
+}
+
+// scrollIn scrolls a tall message i by d lines and reports whether it
+// could; at its end (or start, going up) the key moves on to the next one.
+func (l *msgList) scrollIn(i, d int) bool {
+	if !l.tall(i) {
+		return false
+	}
+	s := l.spans[i]
+	top := min(max(l.top, s.start), s.end()-l.viewH)
+	if (d > 0 && top >= s.end()-l.viewH) || (d < 0 && top <= s.start) {
+		return false
+	}
+	l.top = min(max(top+d, s.start), s.end()-l.viewH)
+	l.sel = i // a tall last message scrolled up stops following
+	return true
+}
+
+// page scrolls the pane by d lines and returns the message to select:
+// sel if it's still fully on screen (a tall one: filling it), otherwise
+// the first such message going down, the last going up; failing that, a
+// tall message still partly showing.
+func (l *msgList) page(sel, d int) int {
+	if len(l.spans) != len(l.msgs) || l.viewH == 0 { // not rendered yet
+		if d > 0 {
+			return sel + 10
+		}
+		return sel - 10
+	}
+	maxTop := max(0, l.total-l.viewH)
+	top := min(max(l.top+d, 0), maxTop)
+	was := l.top
+	l.top = top
+	if d > 0 && top == maxTop {
+		return len(l.msgs) - 1
+	}
+	if d < 0 && top == 0 && was == 0 {
+		return 0
+	}
+	bottom := top + l.viewH
+	full := func(i int) bool {
+		s := l.spans[i]
+		return (s.start >= top && s.end() <= bottom) || (s.start <= top && s.end() >= bottom)
+	}
+	partly := func(i int) bool {
+		s := l.spans[i]
+		return s.n > l.viewH && s.start < bottom && s.end() > top
+	}
+	if full(sel) {
+		return sel
+	}
+	for _, ok := range []func(int) bool{full, partly} {
+		if d > 0 {
+			for i := range l.spans {
+				if ok(i) {
+					return i
+				}
+			}
+		} else {
+			for i := len(l.spans) - 1; i >= 0; i-- {
+				if ok(i) {
+					return i
+				}
+			}
+		}
+	}
+	return sel
 }
 
 // openThread shows the thread for parent; with no replies yet it starts one.

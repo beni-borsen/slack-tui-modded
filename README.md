@@ -88,7 +88,7 @@ expires = "until tomorrow"
 | key | |
 |---|---|
 | `ctrl+k` / `space` | jump to conversation; typing a name also finds people you have no DM with yet, and `enter` starts one |
-| `j` `k`, `g` `G`, `ctrl+d` `ctrl+u` | move |
+| `j` `k`, `g` `G`, `ctrl+d` `ctrl+u` | move; a message taller than the pane scrolls a few lines at a time first (its sender stays at the top, and the bottom row counts the lines left). `ctrl+d` `ctrl+u` scroll half a page |
 | `h` `l`, `tab` | move between sidebar / messages / thread |
 | `enter` | open conversation, or open the selected message's thread |
 | `i` / `a` | write in the focused pane (channel or thread) |
