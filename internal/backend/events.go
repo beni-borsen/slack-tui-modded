@@ -43,11 +43,21 @@ type EvReaction struct {
 	Added   bool
 }
 
+// EvPin is a message pinned or unpinned, by anyone.
+type EvPin struct {
+	Channel string
+	TS      string
+	Added   bool
+}
+
 // EvConversationsChanged means our channel membership or a channel name
 // changed; the UI should reload the conversation list.
 type EvConversationsChanged struct{}
 
 type EvUserChanged struct{ User User }
+
+// EvDND is a change to the user's own Do Not Disturb, made here or elsewhere.
+type EvDND struct{ DND DND }
 
 // EvEmojiChanged means custom emoji were added, removed or renamed.
 type EvEmojiChanged struct{}
@@ -57,7 +67,8 @@ type EvEmojiChanged struct{}
 func (c *Client) Listen(ctx context.Context, out chan<- any) {
 	sm := socketmode.New(c.api, socketmode.OptionLog(log.New(io.Discard, "", 0)))
 	go func() {
-		if err := sm.RunContext(ctx); err != nil && ctx.Err() == nil {
+		// RunContext always ends with an error; it only matters while we still want events.
+		if err := sm.RunContext(ctx); ctx.Err() == nil {
 			send(ctx, out, EvConnection{State: "error", Err: err})
 		}
 	}()
@@ -115,6 +126,10 @@ func (c *Client) translate(data any) any {
 		return EvReaction{Channel: e.Item.Channel, TS: e.Item.Timestamp, User: e.User, Name: e.Reaction, Added: true}
 	case *slackevents.ReactionRemovedEvent:
 		return EvReaction{Channel: e.Item.Channel, TS: e.Item.Timestamp, User: e.User, Name: e.Reaction}
+	case *slackevents.PinAddedEvent:
+		return pinEvent(e.Channel, e.Item, true)
+	case *slackevents.PinRemovedEvent:
+		return pinEvent(e.Channel, e.Item, false)
 	case *slackevents.MemberJoinedChannelEvent:
 		if e.User == c.SelfID {
 			return EvConversationsChanged{}
@@ -129,12 +144,35 @@ func (c *Client) translate(data any) any {
 		return EvEmojiChanged{}
 	case *slackevents.UserChangeEvent:
 		u := e.User
+		real := u.RealName
+		if real == "" {
+			real = u.Profile.RealName
+		}
 		return EvUserChanged{User: User{
-			ID: u.ID, Name: u.Name, DisplayName: u.Profile.DisplayName, RealName: u.RealName,
-			Deleted: u.Deleted, IsBot: u.IsBot, TZ: u.TZ,
+			ID: u.ID, Name: u.Name, DisplayName: u.Profile.DisplayName, RealName: real,
+			Deleted: u.Deleted, IsBot: u.IsBot, TZ: u.TZ, TeamID: u.TeamID,
+			StatusEmoji: u.Profile.StatusEmoji, StatusText: u.Profile.StatusText, StatusExpires: int64(u.Profile.StatusExpiration),
 		}}
+	case *slackevents.DndUpdatedEvent:
+		if e.User != c.SelfID {
+			return nil
+		}
+		s := e.DndStatus
+		return EvDND{DND: newDND(s.DndEnabled, s.NextDndStartTs, s.NextDndEndTs, s.SnoozeEnabled, s.SnoozeEndtime)}
 	}
 	return nil
+}
+
+func pinEvent(channel string, it slackevents.Item, added bool) any {
+	if channel == "" {
+		channel = it.Channel
+	}
+	ts := it.Timestamp
+	if it.Message != nil && it.Message.Timestamp != "" {
+		ts = it.Message.Timestamp
+	}
+	// TS is empty for a file pinned on its own.
+	return EvPin{Channel: channel, TS: ts, Added: added}
 }
 
 func translateMessage(e *slackevents.MessageEvent) any {
@@ -161,7 +199,7 @@ func translateMessage(e *slackevents.MessageEvent) any {
 	if e.Message != nil {
 		m = *e.Message
 	} else {
-		m = slack.Msg{Timestamp: e.TimeStamp, ThreadTimestamp: e.ThreadTimeStamp, User: e.User, Text: e.Text, SubType: e.SubType, Username: e.Username, BotID: e.BotID}
+		m = slack.Msg{Timestamp: e.TimeStamp, ThreadTimestamp: e.ThreadTimeStamp, User: e.User, Text: e.Text, SubType: e.SubType, Username: e.Username, BotID: e.BotID, Blocks: e.Blocks}
 	}
 	if m.Timestamp == "" {
 		m.Timestamp = e.TimeStamp

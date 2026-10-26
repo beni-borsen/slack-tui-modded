@@ -11,6 +11,7 @@ import (
 	"github.com/magnusdalkvist/slack-tui/internal/auth"
 	"github.com/magnusdalkvist/slack-tui/internal/backend"
 	"github.com/magnusdalkvist/slack-tui/internal/config"
+	"github.com/magnusdalkvist/slack-tui/internal/render"
 )
 
 // fakeModel builds a model with canned data and no network.
@@ -248,5 +249,58 @@ func TestDMOrderAndExternal(t *testing.T) {
 	}
 	if v := dump(t, m); !strings.Contains(v, " EXTERNAL") {
 		t.Error("External header missing")
+	}
+}
+
+func TestPrivateChannelTitle(t *testing.T) {
+	m := fakeModel(t, 100, 24)
+	m.convs["C3"].LastRead, m.convs["C3"].Latest = "1.0", "2.0"
+	m.open(unreadsID)
+	if v := dump(t, m); !strings.Contains(v, lockIcon+" secret-project") || strings.Contains(v, "⊘") {
+		t.Errorf("Unreads should show the lock icon for private channels")
+	}
+}
+
+// Messages people send through an app (slack-tui itself) carry its bot_id
+// too; they are still that person's: same colour, grouped with the rest.
+func TestSenderKeyIgnoresAppBotID(t *testing.T) {
+	viaApp := backend.Message{User: "U1", BotID: "B9", Text: "from the terminal"}
+	plain := backend.Message{User: "U1", Text: "from the phone"}
+	if senderKey(viaApp) != senderKey(plain) {
+		t.Error("a person's messages via an app got another sender key")
+	}
+	if senderKey(backend.Message{BotID: "B9"}) == senderKey(plain) {
+		t.Error("a bot-only message took the person's key")
+	}
+	m := fakeModel(t, 100, 24)
+	m.open("C1")
+	m.Update(historyMsg{id: "C1", msgs: []backend.Message{
+		{TS: "400.0", User: "U1", Text: "from the phone"},
+		{TS: "401.0", User: "U1", BotID: "B9", Text: "from the terminal"},
+	}})
+	if v := dump(t, m); strings.Count(v, "Anna Jensen") != 1+strings.Count(m.renderSidebar(30, 24), "Anna Jensen") {
+		t.Errorf("the two messages should be one group:\n%s", v)
+	}
+}
+
+func TestListItemsHang(t *testing.T) {
+	text := render.Mrkdwn("intro line\n• first item that is long enough to wrap\n  ◦ nested *item* that wraps too\n12. numbered item wraps here", fakeModel(t, 100, 30), mdStyles)
+	got := wrap(text, 20)
+	var plain []string
+	for _, l := range got {
+		plain = append(plain, ansi.Strip(l))
+	}
+	want := []string{
+		"intro line",
+		"• first item that is",
+		"  long enough to",
+		"  wrap",
+		"  ◦ nested item that",
+		"    wraps too",
+		"12. numbered item",
+		"    wraps here",
+	}
+	if strings.Join(plain, "\n") != strings.Join(want, "\n") {
+		t.Errorf("got\n%s\nwant\n%s", strings.Join(plain, "\n"), strings.Join(want, "\n"))
 	}
 }

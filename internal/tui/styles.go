@@ -4,7 +4,9 @@ import (
 	"hash/fnv"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 
+	"github.com/magnusdalkvist/slack-tui/internal/backend"
 	"github.com/magnusdalkvist/slack-tui/internal/config"
 	"github.com/magnusdalkvist/slack-tui/internal/render"
 )
@@ -13,6 +15,10 @@ import (
 var (
 	cFg, cDim, cFaint, cAccent, cUnread, cMention, cSelf lipgloss.Color
 	cCodeBg, cSelBg, cOK, cWarn                          lipgloss.Color
+
+	// cSelBg as raw SGR, for content that sets its own foreground.
+	selBgOn  string
+	selBgOff = "\x1b[49m"
 
 	nameColors []lipgloss.Color
 )
@@ -41,6 +47,11 @@ func ApplyTheme(t config.Theme) {
 	cSelf = c(t.Self)
 	cCodeBg = c(t.CodeBg)
 	cSelBg = c(t.SelectionBg)
+	if seq := lipgloss.ColorProfile().Color(t.SelectionBg).Sequence(true); seq != "" {
+		selBgOn = termenv.CSI + seq + "m"
+	} else {
+		selBgOn = ""
+	}
 	cOK = c(t.OK)
 	cWarn = c(t.Warn)
 	contrast := c(t.ContrastFg)
@@ -92,6 +103,16 @@ func ApplyTheme(t config.Theme) {
 		UnknownEmoji: lipgloss.NewStyle().Foreground(cDim),
 		CustomEmoji:  lipgloss.NewStyle().Foreground(c(t.CustomEmoji)).Background(cCodeBg),
 	}
+}
+
+// senderKey is who a message is from, for its name colour and grouping: the
+// person when there is one, since messages people send through an app (this
+// one included) also carry the app's bot_id; otherwise the bot.
+func senderKey(msg backend.Message) string {
+	if msg.User != "" {
+		return msg.User
+	}
+	return msg.BotName + msg.BotID
 }
 
 func nameStyle(userID string) lipgloss.Style {

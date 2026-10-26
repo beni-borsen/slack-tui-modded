@@ -3,6 +3,7 @@
 package backend
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -34,6 +35,8 @@ type Conversation struct {
 	InfoLoaded bool
 	// External is a Slack Connect conversation, shared with another organisation.
 	External bool
+	// Cached is set while the markers come from the last session's cache.
+	Cached bool `json:"-"`
 }
 
 // Unread reports whether there are messages newer than the read marker.
@@ -52,6 +55,23 @@ type User struct {
 	IsBot       bool
 	TZ          string
 	TeamID      string // the person's home workspace
+	// Custom status; StatusExpires is unix seconds, 0 for "don't clear".
+	StatusEmoji   string
+	StatusText    string
+	StatusExpires int64
+	// For the profile card. Email needs the users:read.email scope.
+	Title, Pronouns, Email, Phone string
+	TZLabel                       string // "Central European Summer Time"
+	TZOffset                      int    // seconds east of UTC, now
+}
+
+// Status is the person's custom status, or empty strings once it has
+// expired (Slack clears it a little after that).
+func (u User) Status(now time.Time) (emoji, text string) {
+	if u.StatusExpires > 0 && now.Unix() >= u.StatusExpires {
+		return "", ""
+	}
+	return u.StatusEmoji, u.StatusText
 }
 
 // Label is the name Slack shows for the user.
@@ -77,7 +97,9 @@ type File struct {
 	// Thumb is the best thumbnail Slack made (images only); W/H are the
 	// original's pixel size.
 	Thumb string
-	W, H  int
+	// Anim is an animated version for GIFs (thumbnails are still frames).
+	Anim string
+	W, H int
 }
 
 // IsImage is true for files Slack made a picture thumbnail of.
@@ -96,6 +118,7 @@ type Message struct {
 	ReplyCount  int
 	LatestReply string
 	Edited      bool
+	Pinned      bool // pinned in its conversation
 	Reactions   []Reaction
 	Files       []File
 }
@@ -118,6 +141,7 @@ func fromMsg(m slack.Msg) Message {
 		ReplyCount:  m.ReplyCount,
 		LatestReply: m.LatestReply,
 		Edited:      m.Edited != nil,
+		Pinned:      len(m.PinnedTo) > 0,
 	}
 	// A name the bot gives itself per message ("Deploy v2") wins over its
 	// profile's name ("deploy-bot"), as in Slack.
@@ -126,17 +150,15 @@ func fromMsg(m slack.Msg) Message {
 	} else if out.User == "" && m.BotProfile != nil {
 		out.BotName = m.BotProfile.Name
 	}
+	// Slack flattens the text of a message with a list onto one line;
+	// its blocks still have the lines.
+	if t, ok := blocksText(m.Blocks); ok {
+		out.Text = t
+	}
 	// Bot messages often carry everything in attachments.
 	var extra []string
 	for _, a := range m.Attachments {
-		switch {
-		case a.Text != "":
-			extra = append(extra, a.Text)
-		case a.Fallback != "":
-			extra = append(extra, a.Fallback)
-		case a.Title != "":
-			extra = append(extra, a.Title)
-		}
+		extra = append(extra, attachmentText(a)...)
 	}
 	if len(extra) > 0 {
 		if out.Text != "" {
@@ -148,19 +170,50 @@ func fromMsg(m slack.Msg) Message {
 		out.Reactions = append(out.Reactions, Reaction{Name: r.Name, Count: r.Count, Users: r.Users})
 	}
 	for _, f := range m.Files {
-		thumb := f.Thumb720
-		if thumb == "" {
-			thumb = f.Thumb480
-		}
-		if thumb == "" {
-			thumb = f.Thumb360
-		}
-		out.Files = append(out.Files, File{
-			ID: f.ID, Name: f.Name, Title: f.Title, Mimetype: f.Mimetype, URL: f.URLPrivate, Permalink: f.Permalink,
-			Thumb: thumb, W: f.OriginalW, H: f.OriginalH,
-		})
+		out.Files = append(out.Files, fromFile(f))
 	}
 	return out
+}
+
+// attachmentText is what Slack shows of an attachment: the pretext, the
+// title (a link when it has one) and the text, or the fallback when there is
+// neither title nor text.
+func attachmentText(a slack.Attachment) []string {
+	var out []string
+	if a.Pretext != "" {
+		out = append(out, a.Pretext)
+	}
+	switch {
+	case a.Title != "" && a.TitleLink != "":
+		title := strings.NewReplacer("|", "¦", ">", "›").Replace(a.Title) // must not end the link early
+		out = append(out, "<"+a.TitleLink+"|"+title+">")
+	case a.Title != "":
+		out = append(out, a.Title)
+	}
+	if a.Text != "" {
+		out = append(out, a.Text)
+	} else if a.Title == "" && a.Fallback != "" {
+		out = append(out, a.Fallback)
+	}
+	return out
+}
+
+func fromFile(f slack.File) File {
+	thumb := f.Thumb720
+	if thumb == "" {
+		thumb = f.Thumb480
+	}
+	if thumb == "" {
+		thumb = f.Thumb360
+	}
+	anim := f.Thumb360Gif
+	if anim == "" && f.Mimetype == "image/gif" {
+		anim = f.URLPrivate
+	}
+	return File{
+		ID: f.ID, Name: f.Name, Title: f.Title, Mimetype: f.Mimetype, URL: f.URLPrivate, Permalink: f.Permalink,
+		Thumb: thumb, Anim: anim, W: f.OriginalW, H: f.OriginalH,
+	}
 }
 
 // TSLess compares two Slack timestamps ("1712345678.123456"). An empty
@@ -184,4 +237,16 @@ func splitTS(ts string) (int64, int64) {
 func TSTime(ts string) time.Time {
 	s, u := splitTS(ts)
 	return time.Unix(s, u*1000)
+}
+
+// TSBefore is the timestamp one microsecond before ts: a read marker
+// there leaves the message at ts unread.
+func TSBefore(ts string) string {
+	s, u := splitTS(ts)
+	if u == 0 {
+		s, u = s-1, 999999
+	} else {
+		u--
+	}
+	return fmt.Sprintf("%d.%06d", s, u)
 }

@@ -125,6 +125,7 @@ func (m *Model) askDelete(conv string, msg backend.Message) tea.Cmd {
 
 // removeMessage drops a message from every view that shows it.
 func (m *Model) removeMessage(conv, ts string) {
+	m.touch(conv)
 	if l, ok := m.lists[conv]; ok {
 		l.msgs = remove(l.msgs, ts)
 		if l.sel >= len(l.msgs) {

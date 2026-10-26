@@ -57,7 +57,7 @@ func TestSanitizeWidth(t *testing.T) {
 	old := inTmux
 	defer func() { inTmux = old }()
 	inTmux = true
-	if got := sanitizeWidth("ok­soft 👍🏽"); got != "oksoft 👍" {
+	if got := sanitizeWidth("ok\u00adsoft 👍🏽"); got != "oksoft 👍" {
 		t.Errorf("got %q", got)
 	}
 	inTmux = false

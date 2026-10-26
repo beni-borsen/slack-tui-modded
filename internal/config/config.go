@@ -23,8 +23,19 @@ type Section struct {
 	Icon string `toml:"icon"`
 }
 
+// StatusTemplate is a ready-made status for `:status <name>`.
+type StatusTemplate struct {
+	Name  string `toml:"name"`
+	Emoji string `toml:"emoji"`
+	Text  string `toml:"text"`
+	// Expires is "30m", "2h", "1d", "until 17:00" or "until tomorrow";
+	// empty keeps the status until changed.
+	Expires string `toml:"expires"`
+}
+
 type Config struct {
-	Sections []Section `toml:"section"`
+	Sections []Section        `toml:"section"`
+	Statuses []StatusTemplate `toml:"status"`
 	// TimeFormat is a Go time layout for message timestamps.
 	TimeFormat string `toml:"time_format"`
 	// SidebarWidth is the width of the left column in cells.
@@ -32,16 +43,22 @@ type Config struct {
 	// RefreshMinutes is how often unread markers are re-checked against
 	// Slack, to pick up messages read on another device.
 	RefreshMinutes int `toml:"refresh_minutes"`
+	// PresenceMinutes is how often the presence of the people in the
+	// sidebar's DMs is checked; negative turns it off.
+	PresenceMinutes int `toml:"presence_minutes"`
 	// Images is "auto" (inline images when the terminal can draw them) or "off".
 	Images       string `toml:"images"`
 	ImageMaxCols int    `toml:"image_max_cols"`
 	ImageMaxRows int    `toml:"image_max_rows"`
 	// ImageViewer opens images with `o`; other files use xdg-open.
 	ImageViewer string `toml:"image_viewer"`
+	// DownloadDir is where `s` saves files; empty means the desktop's
+	// Downloads folder. A leading ~ is the home directory.
+	DownloadDir string `toml:"download_dir"`
 }
 
 func Default() Config {
-	return Config{TimeFormat: "15:04", SidebarWidth: 30, RefreshMinutes: 5, Images: "auto", ImageMaxCols: 40, ImageMaxRows: 12}
+	return Config{TimeFormat: "15:04", SidebarWidth: 30, RefreshMinutes: 5, PresenceMinutes: 3, Images: "auto", ImageMaxCols: 40, ImageMaxRows: 12}
 }
 
 // Dir is the config directory.
@@ -80,6 +97,9 @@ func Load() (Config, error) {
 	}
 	if c.RefreshMinutes <= 0 {
 		c.RefreshMinutes = d.RefreshMinutes
+	}
+	if c.PresenceMinutes == 0 {
+		c.PresenceMinutes = d.PresenceMinutes
 	}
 	if c.Images == "" {
 		c.Images = d.Images

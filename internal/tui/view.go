@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -12,6 +13,7 @@ import (
 )
 
 func (m *Model) View() string {
+	m.viewSeq++ // images drawn below record it; only those animate
 	if m.width == 0 || m.height == 0 {
 		return ""
 	}
@@ -43,8 +45,22 @@ func (m *Model) View() string {
 		main = lipgloss.Place(mainW, h, lipgloss.Center, lipgloss.Top, "\n\n"+m.renderPicker(mainW, h))
 	case m.opener != nil:
 		main = lipgloss.Place(mainW, h, lipgloss.Center, lipgloss.Top, "\n\n"+m.renderOpener(mainW))
-	case m.help:
-		main = lipgloss.Place(mainW, h, lipgloss.Center, lipgloss.Center, m.renderHelp())
+	case m.profile != nil:
+		main = lipgloss.Place(mainW, h, lipgloss.Center, lipgloss.Top, "\n\n"+m.renderProfile(mainW))
+	case m.help != nil:
+		main = lipgloss.Place(mainW, h, lipgloss.Center, lipgloss.Top, "\n"+m.renderHelp(mainW, h-1))
+	case m.search != nil && m.search.open:
+		main = m.renderSearch(mainW, h)
+	case m.pins != nil:
+		main = m.renderPins(mainW, h)
+	case m.sched != nil:
+		main = m.renderScheduled(mainW, h)
+	case m.chans != nil:
+		main = m.renderChans(mainW, h)
+	case m.members != nil:
+		main = m.renderMembers(mainW, h)
+	case m.shared != nil:
+		main = m.renderShared(mainW, h)
 	case m.current == unreadsID:
 		main = m.renderUnreads(mainW, h)
 	case m.thread != nil && mainW >= 80:
@@ -66,6 +82,9 @@ func (m *Model) View() string {
 		body = lipgloss.JoinHorizontal(lipgloss.Top, fit(main, mainW, h), vline(h), fit(m.renderSidebar(sw, h), sw, h))
 	default:
 		body = lipgloss.JoinHorizontal(lipgloss.Top, fit(m.renderSidebar(sw, h), sw, h), vline(h), fit(main, mainW, h))
+	}
+	if m.cmd != nil {
+		return m.overlayCmdCompletion(body) + "\n" + m.renderCmdLine()
 	}
 	return body + "\n" + m.renderStatus()
 }
@@ -105,7 +124,7 @@ func (m *Model) convTitle(c *backend.Conversation) string {
 	case backend.KindChannel:
 		return "# " + c.Name
 	case backend.KindPrivate:
-		return "⊘ " + c.Name
+		return lockIcon + " " + c.Name
 	default:
 		return m.convLabel(c)
 	}
@@ -117,6 +136,20 @@ func (m *Model) renderConvPane(w, h int) string {
 		return placeholder("conversation not found", w, h)
 	}
 	title := sTitle.Render(m.convTitle(c))
+	if c.Kind == backend.KindDM && c.UserID != m.client.SelfID {
+		if m.presence[c.UserID] {
+			title += " " + sOK.Render(onlineDot)
+		}
+		if line := m.statusLine(c.UserID); line != "" {
+			if exp := m.users[c.UserID].StatusExpires; exp > 0 {
+				line += sDim.Render(" until " + clock(time.Unix(exp, 0), m.cfg.TimeFormat))
+			}
+			title += "  " + line
+		}
+	}
+	if n := m.scheduledIn(c.ID); n > 0 {
+		title += "  " + sWarn.Render(fmt.Sprintf("%s %d scheduled", schedIcon, n))
+	}
 	if c.Topic != "" {
 		title += "  " + sTopic.Render(strings.ReplaceAll(render.Mrkdwn(c.Topic, m, mdStyles), "\n", " "))
 	}
@@ -153,20 +186,48 @@ func (m *Model) renderInput(w int, isTarget bool, hint string) string {
 	}
 	m.input.SetWidth(w - 2)
 	m.fitInput() // the width may have changed, and with it the wrapping
+	// Labels go into the rule above the box: "── editing … ── image … ──".
+	var labels []string
+	if m.editing != nil {
+		labels = append(labels, sWarn.Render(" editing · enter save · esc cancel "))
+	}
+	if label := m.broadcastLabel(); label != "" {
+		if m.broadcast {
+			labels = append(labels, sWarn.Render(label))
+		} else {
+			labels = append(labels, sFaint.Render(label))
+		}
+	}
+	if label := m.attachLabel(); label != "" {
+		labels = append(labels, sWarn.Render(label))
+	}
 	top := rule(w, true)
+	if len(labels) > 0 {
+		bar := sBar.Render("──") + strings.Join(labels, sBar.Render("──"))
+		top = ansi.Truncate(bar+sBar.Render(strings.Repeat("─", max(0, w-lipgloss.Width(bar)))), w, "")
+	}
 	if m.complete != nil {
 		top = strings.Join(m.renderCompletion(w), "\n") + "\n" + top
 	}
-	if m.editing != nil {
-		label := " editing · enter save · esc cancel "
-		bar := sBar.Render("──") + sWarn.Render(label) + sBar.Render(strings.Repeat("─", max(0, w-2-lipgloss.Width(label))))
-		top = strings.TrimSuffix(top, rule(w, true)) + bar
-	}
-	if label := m.attachLabel(); label != "" {
-		bar := sBar.Render("──") + sWarn.Render(label) + sBar.Render(strings.Repeat("─", max(0, w-2-lipgloss.Width(label))))
-		top = strings.TrimSuffix(top, rule(w, true)) + bar
-	}
 	return top + "\n" + indent(m.input.View(), "  ")
+}
+
+// broadcastLabel is the bar above a thread reply being written: whether it
+// also goes to the channel, as Slack's checkbox.
+func (m *Model) broadcastLabel() string {
+	conv, thread := m.inputTarget()
+	c := m.convs[conv]
+	if thread == "" || c == nil || m.editing != nil {
+		return ""
+	}
+	where := "#" + c.Name
+	if c.IsDM() {
+		where = "the conversation"
+	}
+	if m.broadcast {
+		return " also sending to " + where + " · ctrl+o undo "
+	}
+	return " ctrl+o also send to " + where + " "
 }
 
 func indent(s, prefix string) string {
@@ -228,7 +289,7 @@ func (m *Model) renderUnreads(w, h int) string {
 				msgs = msgs[len(msgs)-show:]
 			}
 			for _, msg := range msgs {
-				name := nameStyle(msg.User + msg.BotName).Render(m.senderName(msg))
+				name := nameStyle(senderKey(msg)).Render(m.senderName(msg))
 				text := strings.ReplaceAll(render.Mrkdwn(msg.Text, m, mdStyles), "\n", " ")
 				if strings.TrimSpace(msg.Text) == "" && len(msg.Files) > 0 {
 					text = sDim.Render(msg.Files[0].Name)
@@ -271,6 +332,8 @@ func (m *Model) renderStatus() string {
 	mode := sModeN.Render("NORMAL")
 	if m.insert {
 		mode = sModeI.Render("INSERT")
+	} else if m.search != nil && m.search.typing {
+		mode = sModeI.Render("SEARCH")
 	}
 	var conn string
 	switch m.conn {
@@ -281,7 +344,7 @@ func (m *Model) renderStatus() string {
 	default:
 		conn = sWarn.Render("○ connecting")
 	}
-	parts := []string{mode, conn}
+	parts := append([]string{mode, conn}, m.meStatus()...)
 	if m.confirm != nil {
 		parts = append(parts, sWarn.Render(m.confirm.prompt))
 	}
@@ -296,47 +359,10 @@ func (m *Model) renderStatus() string {
 		}
 	}
 	left := strings.Join(parts, "  ")
-	right := sDim.Render("ctrl+k jump · ? help ")
+	right := sDim.Render("ctrl+k jump · / search · : command · ? help ")
 	gap := m.width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 1 {
 		return ansi.Truncate(left, m.width, "…")
 	}
 	return left + strings.Repeat(" ", gap) + right
-}
-
-func (m *Model) renderHelp() string {
-	rows := [][2]string{
-		{"ctrl+k / space", "jump to conversation"},
-		{"j k  ↑ ↓", "move"},
-		{"g G", "top / bottom"},
-		{"ctrl+d ctrl+u", "half page"},
-		{"h l  tab", "move between panes"},
-		{"enter", "open conversation / thread"},
-		{"i a", "write a message (in the focused pane)"},
-		{"enter  (insert)", "send"},
-		{"alt+enter ctrl+j", "new line"},
-		{"ctrl+v  (insert)", "attach clipboard image (again for more)"},
-		{"ctrl+b alt+i  (insert)", "bold / italic the word at the cursor"},
-		{":ta @an #de  (insert)", "complete emoji, people, channels"},
-		{"esc", "back to normal mode"},
-		{"u", "next unread conversation"},
-		{"r", "mark conversation read"},
-		{"z  enter on header", "fold / unfold sidebar section"},
-		{"S", "move the sidebar to the other side"},
-		{"s", "hide / show the sidebar"},
-		{"+", "react to the message"},
-		{"c", "copy the message text"},
-		{"e", "edit your message"},
-		{"↑  (empty input)", "edit your last message"},
-		{"D", "delete your message"},
-		{"v", "view images full-window: ← → browse, o open, esc close"},
-		{"o", "open the message's file or link (a chooser when there are several)"},
-		{"x  (thread)", "close thread"},
-		{"q", "quit"},
-	}
-	var lines []string
-	for _, r := range rows {
-		lines = append(lines, sKey.Render(fmt.Sprintf("%-18s", r[0]))+"  "+sNormal.Render(r[1]))
-	}
-	return sBox.Render(sTitle.Render("Keys") + "\n\n" + strings.Join(lines, "\n") + "\n\n" + sDim.Render("any key to close"))
 }

@@ -215,11 +215,20 @@ func (c *Client) Replies(ctx context.Context, id, threadTS string) ([]Message, e
 	}
 }
 
-// Post sends a message as the user, into a thread when threadTS is set.
-func (c *Client) Post(ctx context.Context, id, text, threadTS string) (string, error) {
-	opts := []slack.MsgOption{slack.MsgOptionText(text, false), slack.MsgOptionLinkNames(true)}
+// Post sends a message as the user, into a thread when threadTS is set;
+// broadcast also shows the reply in the channel.
+func (c *Client) Post(ctx context.Context, id, text, threadTS string, broadcast bool) (string, error) {
+	opts := []slack.MsgOption{slack.MsgOptionLinkNames(true)}
+	if blocks := listBlocks(text); blocks != nil {
+		opts = append(opts, slack.MsgOptionText(listFallback(text), false), slack.MsgOptionBlocks(blocks...))
+	} else {
+		opts = append(opts, slack.MsgOptionText(text, false))
+	}
 	if threadTS != "" {
 		opts = append(opts, slack.MsgOptionTS(threadTS))
+		if broadcast {
+			opts = append(opts, slack.MsgOptionBroadcast())
+		}
 	}
 	var ts string
 	err := retry(ctx, func() (err error) {
@@ -278,7 +287,12 @@ func (c *Client) React(ctx context.Context, id, ts, name string, add bool) error
 // Edit replaces the text of one of the user's own messages.
 func (c *Client) Edit(ctx context.Context, id, ts, text string) error {
 	err := retry(ctx, func() error {
-		_, _, _, err := c.api.UpdateMessageContext(ctx, id, ts, slack.MsgOptionText(text, false))
+		// No list: an empty block list clears one the message had.
+		opt := []slack.MsgOption{slack.MsgOptionText(text, false), slack.MsgOptionBlocks()}
+		if blocks := listBlocks(text); blocks != nil {
+			opt = []slack.MsgOption{slack.MsgOptionText(listFallback(text), false), slack.MsgOptionBlocks(blocks...)}
+		}
+		_, _, _, err := c.api.UpdateMessageContext(ctx, id, ts, opt...)
 		return err
 	})
 	if err != nil {
@@ -348,5 +362,8 @@ func fromUser(u slack.User) User {
 	return User{
 		ID: u.ID, Name: u.Name, DisplayName: u.Profile.DisplayName, RealName: real,
 		Deleted: u.Deleted, IsBot: u.IsBot, TZ: u.TZ, TeamID: u.TeamID,
+		StatusEmoji: u.Profile.StatusEmoji, StatusText: u.Profile.StatusText, StatusExpires: int64(u.Profile.StatusExpiration),
+		Title: u.Profile.Title, Pronouns: u.Profile.Pronouns, Email: u.Profile.Email, Phone: u.Profile.Phone,
+		TZLabel: u.TZLabel, TZOffset: u.TZOffset,
 	}
 }

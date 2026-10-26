@@ -14,6 +14,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/magnusdalkvist/slack-tui/internal/backend"
+	"github.com/magnusdalkvist/slack-tui/internal/cache"
 	"github.com/magnusdalkvist/slack-tui/internal/config"
 	"github.com/magnusdalkvist/slack-tui/internal/kitty"
 )
@@ -35,6 +36,10 @@ const (
 	userIcon    = "\uf007"
 	groupIcon   = "\uedca"
 	lockIcon    = "\uf456" // private channels
+	dndIcon     = "\uf186" // moon, for Do Not Disturb
+	pinIcon     = "\uf435" // after the time of pinned messages
+	schedIcon   = "\uf017" // clock, for scheduled messages
+	onlineDot   = "●"      // after the names of people who are active
 )
 
 const pageSize = 50
@@ -50,12 +55,24 @@ type msgList struct {
 	// newSince is the read marker when the conversation was opened; the
 	// "new" divider goes above the first message after it.
 	newSince string
+	// The layout of the last render, for keys that scroll by lines: where
+	// each message's lines are, the pane's height and the lines in all.
+	spans []span
+	viewH int
+	total int
 }
+
+// span is where one message's lines are in a rendered list.
+type span struct{ start, n int }
+
+func (s span) end() int { return s.start + s.n }
 
 type threadState struct {
 	conv string
 	ts   string
 	list msgList
+	// cached: replies shown from the cache, replaced by the fetched thread.
+	cached map[string]bool
 }
 
 type unreadsState struct {
@@ -94,11 +111,24 @@ type Model struct {
 	extUsers    map[string]bool // people from other organisations
 	opener      *opener         // what `o` opens, when a message has several
 	attach      []*attachment   // clipboard images going out with the next send
+	broadcast   bool            // thread replies also go to the channel (ctrl+o)
 
 	switcher *switcher
-	help     bool
+	search   *searchState  // `/`; nil until first used
+	pins     *pinsState    // `P`, while open
+	sched    *schedState   // `:scheduled`, while open
+	chans    *chansState   // `:join` channel browser, while open
+	shared   *sharedState  // `F`: files and links of a conversation, while open
+	cmd      *cmdLine      // `:` command line, while open
+	cmdHist  []string      // commands run this session
+	bmEdit   *bookmarkEdit // the bookmark the :bookmark being run changes
+	jump     *jumpState    // search result being loaded into view
+	help     *helpState    // `?`, while open
+	profile  *profileState // `I`: a person's profile card, while open
+	members  *membersState // `:members`, while open
 
 	booted      bool
+	fromCache   bool // drawn from the cache; the API hasn't answered yet
 	bootErr     error
 	conn        string
 	infoPending int
@@ -121,6 +151,8 @@ type Model struct {
 	cellW, cellH int
 	imgSem       chan struct{}
 	emojiImgs    map[string]*imgState // custom emoji images, by name
+	animating    bool                 // the animation tick is running
+	viewSeq      int                  // counts views, for what is on screen
 
 	picker  *picker
 	editing *editState
@@ -135,6 +167,21 @@ type Model struct {
 	dismissed      string // query whose list was closed with esc
 	allEmoji       []string
 	allEmojiCustom int // len(m.emoji) when allEmoji was built
+
+	scheduled   []backend.Scheduled // the user's scheduled messages, soonest first
+	schedThread map[string]string   // scheduled ID → thread, for those scheduled here (Slack's list leaves it out)
+
+	public        []backend.PublicChannel // the workspace's public channels; nil until `:join` first fetches them
+	publicLoading bool
+
+	dnd      backend.DND     // the user's own Do Not Disturb
+	dndSeq   int             // ignores DND refresh ticks booked before a change
+	away     bool            // the user set themselves away
+	presence map[string]bool // user ID → active, for people in the DM list
+
+	cache *cache.Cache        // nil when caching is off
+	dirty map[string]*msgList // lists to save at the next flush, by cache key
+	saved map[string]uint64   // hash of what was last saved, by kind
 }
 
 func New(ctx context.Context, client *backend.Client, cfg config.Config) *Model {
@@ -165,7 +212,11 @@ func New(ctx context.Context, client *backend.Client, cfg config.Config) *Model 
 		emoji:         map[string]string{},
 		images:        map[string]*imgState{},
 		composeTokens: map[string]string{},
+		schedThread:   map[string]string{},
 		emojiImgs:     map[string]*imgState{},
+		dirty:         map[string]*msgList{},
+		saved:         map[string]uint64{},
+		presence:      map[string]bool{},
 		imgSem:        make(chan struct{}, 3),
 		current:       unreadsID,
 		focus:         fSidebar,
@@ -214,6 +265,7 @@ type sinceMsg struct {
 
 type postedMsg struct {
 	id, threadTS, ts, text string
+	broadcast              bool
 	err                    error
 }
 
@@ -240,7 +292,7 @@ func (m *Model) Init() tea.Cmd {
 	if m.sideHidden {
 		m.focus = fMessages
 	}
-	return tea.Batch(m.boot(), m.loadEmoji(), m.waitEvent(), textarea.Blink)
+	return tea.Batch(m.loadCache(), m.boot(), m.loadEmoji(), m.waitEvent(), m.flushLater(), textarea.Blink)
 }
 
 func (m *Model) waitEvent() tea.Cmd {
@@ -342,8 +394,12 @@ func (m *Model) loadHistory(id string, older bool) tea.Cmd {
 	if older && len(l.msgs) > 0 {
 		before = l.msgs[0].TS
 	}
+	limit := pageSize
+	if m.jump != nil && m.jump.conv == id {
+		limit = jumpPageSize // looking for a search result further back
+	}
 	return func() tea.Msg {
-		msgs, more, err := m.client.History(m.ctx, id, before, pageSize)
+		msgs, more, err := m.client.History(m.ctx, id, before, limit)
 		return historyMsg{id: id, msgs: msgs, hasMore: more, older: older, err: err}
 	}
 }
@@ -368,10 +424,10 @@ func (m *Model) loadSince(id string) tea.Cmd {
 	}
 }
 
-func (m *Model) post(id, threadTS, text string) tea.Cmd {
+func (m *Model) post(id, threadTS, text string, broadcast bool) tea.Cmd {
 	return func() tea.Msg {
-		ts, err := m.client.Post(m.ctx, id, text, threadTS)
-		return postedMsg{id: id, threadTS: threadTS, ts: ts, text: text, err: err}
+		ts, err := m.client.Post(m.ctx, id, text, threadTS, broadcast)
+		return postedMsg{id: id, threadTS: threadTS, ts: ts, text: text, broadcast: broadcast, err: err}
 	}
 }
 
@@ -434,7 +490,7 @@ func (m *Model) mergeConv(c backend.Conversation) {
 	// Keep the name/kind from the list, and never move markers backwards:
 	// live events may know about newer messages than the API call did.
 	if c.InfoLoaded {
-		if backend.TSLess(old.LastRead, c.LastRead) || !old.InfoLoaded {
+		if backend.TSLess(old.LastRead, c.LastRead) || !old.InfoLoaded || old.Cached {
 			old.LastRead = c.LastRead
 		}
 		if backend.TSLess(old.Latest, c.Latest) {
@@ -446,7 +502,7 @@ func (m *Model) mergeConv(c backend.Conversation) {
 		if !old.Unread() {
 			old.Mentions = 0
 		}
-		old.InfoLoaded = true
+		old.InfoLoaded, old.Cached = true, false
 	}
 	if c.Topic != "" {
 		old.Topic = c.Topic
@@ -492,7 +548,7 @@ func (m *Model) open(id string) tea.Cmd {
 	m.focus = fMessages
 	// Always fetch the newest page: on first open it's the load, after that
 	// it refreshes what live events may have missed.
-	cmds := []tea.Cmd{m.loadHistory(id, false)}
+	cmds := []tea.Cmd{m.loadHistory(id, false), m.presenceFor(id)}
 	cmds = append(cmds, m.markRead(id))
 	return tea.Batch(cmds...)
 }

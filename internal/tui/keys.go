@@ -21,11 +21,10 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 	if m.switcher != nil {
 		return m.switcherKey(k)
 	}
-	if m.picker != nil {
-		return m.pickerKey(k)
-	}
-	if m.opener != nil {
-		return m.openerKey(k)
+	// The command line and y/n questions can open over the panes below
+	// (`a` and `d` in the pins pane).
+	if m.cmd != nil {
+		return m.cmdKey(k)
 	}
 	if c := m.confirm; c != nil {
 		m.confirm = nil
@@ -34,9 +33,35 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 		}
 		return m.setStatus("cancelled", false)
 	}
-	if m.help {
-		m.help = false
-		return nil
+	if m.search != nil && m.search.open {
+		return m.searchKey(k)
+	}
+	if m.pins != nil {
+		return m.pinsKey(k)
+	}
+	if m.chans != nil {
+		return m.chansKey(k)
+	}
+	if m.shared != nil {
+		return m.sharedKey(k)
+	}
+	if m.picker != nil {
+		return m.pickerKey(k)
+	}
+	if m.opener != nil {
+		return m.openerKey(k)
+	}
+	if m.profile != nil {
+		return m.profileKey(k)
+	}
+	if m.members != nil {
+		return m.membersKey(k)
+	}
+	if m.sched != nil {
+		return m.schedKey(k)
+	}
+	if m.help != nil {
+		return m.helpKey(k)
 	}
 	if m.insert {
 		return m.insertKey(k)
@@ -52,11 +77,22 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 	case "q":
 		return m.quit()
 	case "?":
-		m.help = true
-		return nil
+		return m.openHelp()
 	case "ctrl+k", " ":
 		m.switcher = m.newSwitcher()
 		return nil
+	case "/":
+		return m.openSearch()
+	case "n":
+		return m.searchStep(1)
+	case "N":
+		return m.searchStep(-1)
+	case ":":
+		return m.openCmd()
+	case "P":
+		return m.openPins()
+	case "F":
+		return m.openShared()
 	case "tab":
 		m.cycleFocus(1)
 		return nil
@@ -72,7 +108,7 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 	case "S":
 		m.sideRight = !m.sideRight
 		return m.saveSideState()
-	case "s":
+	case "]":
 		m.sideHidden = !m.sideHidden
 		if m.sideHidden && m.focus == fSidebar {
 			m.focus = fMessages
@@ -170,6 +206,8 @@ func (m *Model) sidebarKey(k tea.KeyMsg) tea.Cmd {
 				m.focus = fThread
 			}
 		}
+	case "I":
+		return m.profileFromSidebar()
 	case "enter", "l", "right":
 		if m.sideCur >= len(m.side) {
 			return nil
@@ -234,22 +272,28 @@ func (m *Model) listKey(k tea.KeyMsg, l *msgList, inThread bool) tea.Cmd {
 		sel = n - 1
 	}
 	var cmd tea.Cmd
+	follow := false // back at the bottom: follow new messages again
 	switch k.String() {
 	case "j", "down":
-		sel++
+		if !l.scrollIn(sel, l.lineStep()) {
+			sel++
+		}
 	case "k", "up":
+		if l.scrollIn(sel, -l.lineStep()) {
+			break
+		}
 		if sel == 0 && l.hasMore && !inThread {
 			cmd = m.loadHistory(m.current, true)
 		}
 		sel--
 	case "ctrl+d":
-		sel += 10
+		sel = l.page(sel, max(1, l.viewH/2))
 	case "ctrl+u":
-		sel -= 10
+		sel = l.page(sel, -max(1, l.viewH/2))
 	case "g", "home":
 		sel = 0
 	case "G", "end", "esc":
-		sel = n - 1
+		sel, follow = n-1, true
 	case "h", "left":
 		if inThread {
 			m.focus = fMessages
@@ -276,14 +320,28 @@ func (m *Model) listKey(k tea.KeyMsg, l *msgList, inThread bool) tea.Cmd {
 		return m.startEdit(m.listConv(inThread), l.msgs[sel], inThread)
 	case "D":
 		return m.askDelete(m.listConv(inThread), l.msgs[sel])
+	case "p":
+		return m.togglePin(m.listConv(inThread), l.msgs[sel])
 	case "v":
 		return m.openViewer(l, sel)
 	case "o":
 		return m.openFrom(l.msgs[sel])
+	case "s":
+		return m.saveFiles(l.msgs[sel].Files)
+	case "I":
+		return m.profileOfMessage(l.msgs[sel])
+	case "U":
+		if inThread {
+			return m.setStatus("Slack's API can't mark thread replies unread", false)
+		}
+		l.sel = sel // stay here, so following new messages doesn't read it again
+		return m.markUnread(m.current, l.msgs[sel])
 	}
 	sel = min(max(sel, 0), n-1)
-	if sel == n-1 {
-		l.sel = -1 // back at the bottom: follow new messages again
+	// The last message follows once its end is on screen; one taller than
+	// the pane is read from its top first.
+	if sel == n-1 && (follow || !l.tall(sel) || l.top+l.viewH >= l.spans[sel].end()) {
+		l.sel = -1
 		if !inThread {
 			cmd = tea.Batch(cmd, m.markRead(m.current))
 		}
@@ -291,6 +349,84 @@ func (m *Model) listKey(k tea.KeyMsg, l *msgList, inThread bool) tea.Cmd {
 		l.sel = sel
 	}
 	return cmd
+}
+
+// tall reports whether message i was taller than the pane at the last render.
+func (l *msgList) tall(i int) bool {
+	return i < len(l.spans) && l.spans[i].n > l.viewH
+}
+
+// lineStep is how far j/k scroll inside a tall message: a few lines, but
+// never past what the cut-off hints cover up, so no line is skipped.
+func (l *msgList) lineStep() int {
+	return max(1, min(3, l.viewH-2))
+}
+
+// scrollIn scrolls a tall message i by d lines and reports whether it
+// could; at its end (or start, going up) the key moves on to the next one.
+func (l *msgList) scrollIn(i, d int) bool {
+	if !l.tall(i) {
+		return false
+	}
+	s := l.spans[i]
+	top := min(max(l.top, s.start), s.end()-l.viewH)
+	if (d > 0 && top >= s.end()-l.viewH) || (d < 0 && top <= s.start) {
+		return false
+	}
+	l.top = min(max(top+d, s.start), s.end()-l.viewH)
+	l.sel = i // a tall last message scrolled up stops following
+	return true
+}
+
+// page scrolls the pane by d lines and returns the message to select:
+// sel if it's still fully on screen (a tall one: filling it), otherwise
+// the first such message going down, the last going up; failing that, a
+// tall message still partly showing.
+func (l *msgList) page(sel, d int) int {
+	if len(l.spans) != len(l.msgs) || l.viewH == 0 { // not rendered yet
+		if d > 0 {
+			return sel + 10
+		}
+		return sel - 10
+	}
+	maxTop := max(0, l.total-l.viewH)
+	top := min(max(l.top+d, 0), maxTop)
+	was := l.top
+	l.top = top
+	if d > 0 && top == maxTop {
+		return len(l.msgs) - 1
+	}
+	if d < 0 && top == 0 && was == 0 {
+		return 0
+	}
+	bottom := top + l.viewH
+	full := func(i int) bool {
+		s := l.spans[i]
+		return (s.start >= top && s.end() <= bottom) || (s.start <= top && s.end() >= bottom)
+	}
+	partly := func(i int) bool {
+		s := l.spans[i]
+		return s.n > l.viewH && s.start < bottom && s.end() > top
+	}
+	if full(sel) {
+		return sel
+	}
+	for _, ok := range []func(int) bool{full, partly} {
+		if d > 0 {
+			for i := range l.spans {
+				if ok(i) {
+					return i
+				}
+			}
+		} else {
+			for i := len(l.spans) - 1; i >= 0; i-- {
+				if ok(i) {
+					return i
+				}
+			}
+		}
+	}
+	return sel
 }
 
 // openThread shows the thread for parent; with no replies yet it starts one.
@@ -301,7 +437,7 @@ func (m *Model) openThread(parent backend.Message) tea.Cmd {
 	}
 	m.thread = &threadState{conv: m.current, ts: ts, list: msgList{sel: -1, loading: true, msgs: []backend.Message{parent}}}
 	m.focus = fThread
-	return m.loadReplies(m.current, ts)
+	return tea.Batch(m.loadThreadCache(m.current, ts), m.loadReplies(m.current, ts))
 }
 
 func (m *Model) unreadsKey(k tea.KeyMsg) tea.Cmd {
@@ -346,6 +482,26 @@ func (m *Model) markSelectedRead() tea.Cmd {
 	cmd := m.markRead(id)
 	m.rebuildSidebar()
 	return cmd
+}
+
+// markUnread moves the read marker to just before msg, like Slack's
+// "Mark unread": the conversation is unread from msg on, until it is
+// opened again or read to the bottom.
+func (m *Model) markUnread(id string, msg backend.Message) tea.Cmd {
+	c := m.convs[id]
+	if c == nil {
+		return nil
+	}
+	ts := backend.TSBefore(msg.TS)
+	c.LastRead = ts
+	if backend.TSLess(c.Latest, msg.TS) {
+		c.Latest = msg.TS
+	}
+	delete(m.unreadMsgs, id) // the Unreads view fetches from the new marker
+	m.markSeq[id]++          // and a pending mark-read tick is void
+	m.list(id).newSince = ts
+	m.rebuildSidebar()
+	return tea.Batch(m.mark(id, ts), m.setStatus("marked unread from here", false))
 }
 
 // nextUnread opens the next unread conversation in sidebar order.
@@ -395,6 +551,14 @@ func (m *Model) insertKey(k tea.KeyMsg) tea.Cmd {
 		return m.paste(string(k.Runes), false)
 	case k.Type == tea.KeyCtrlV && m.editing == nil:
 		return m.paste("", true)
+	case k.Type == tea.KeyCtrlS && m.editing == nil:
+		return m.laterFromInsert()
+	case k.Type == tea.KeyCtrlO && m.editing == nil:
+		if _, thread := m.inputTarget(); thread == "" {
+			return m.setStatus("ctrl+o is for thread replies: also send to the channel", false)
+		}
+		m.broadcast = !m.broadcast
+		return nil
 	case k.Type == tea.KeyCtrlB:
 		m.toggleMark('*')
 		return nil
@@ -434,13 +598,22 @@ func (m *Model) insertKey(k tea.KeyMsg) tea.Cmd {
 		if l := m.lists[conv]; l != nil && thread == "" {
 			l.sel = -1
 		}
+		broadcast := m.broadcast && thread != ""
+		m.broadcast = false
 		if atts := m.attach; len(atts) > 0 {
 			m.attach = nil
-			return tea.Batch(m.upload(conv, thread, atts, render.Encode(text, m.composeTokens)),
-				m.setStatus(plural(len(atts), "uploading 1 image…", fmt.Sprintf("uploading %d images…", len(atts))), false))
+			status := plural(len(atts), "uploading 1 image…", fmt.Sprintf("uploading %d images…", len(atts)))
+			if broadcast {
+				status += " (only in the thread: Slack can't send files to the channel too)"
+			}
+			return tea.Batch(m.upload(conv, thread, atts, render.Encode(text, m.composeTokens)), m.setStatus(status, false))
 		}
-		return m.post(conv, thread, render.Encode(text, m.composeTokens))
+		return m.post(conv, thread, render.Encode(text, m.composeTokens), broadcast)
 	}
+	// Type into a box at full height, then shrink it to fit: a box still at
+	// its old height would scroll when the text wraps onto a new row, and
+	// growing it afterwards doesn't scroll back, hiding the first row.
+	m.input.SetHeight(m.inputLimit())
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(k)
 	m.fitInput()
@@ -452,8 +625,12 @@ func (m *Model) insertKey(k tea.KeyMsg) tea.Cmd {
 // up to 8 rows or a third of the window, whichever is less; past that the
 // box scrolls.
 func (m *Model) fitInput() {
-	limit := max(1, min(8, m.height/3))
-	m.input.SetHeight(min(max(m.inputRows(), 1), limit))
+	m.input.SetHeight(min(max(m.inputRows(), 1), m.inputLimit()))
+}
+
+// inputLimit is the most rows the input box grows to.
+func (m *Model) inputLimit() int {
+	return max(1, min(8, m.height/3))
 }
 
 // listConv is the conversation a message list belongs to.

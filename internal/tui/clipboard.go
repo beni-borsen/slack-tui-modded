@@ -26,6 +26,11 @@ func (m *Model) copyMessage(msg backend.Message) tea.Cmd {
 	if text == "" && len(msg.Files) > 0 {
 		text = msg.Files[0].Permalink // a file-only message: copy its link
 	}
+	return m.copyText(text)
+}
+
+// copyText puts text on the clipboard (see copyMessage).
+func (m *Model) copyText(text string) tea.Cmd {
 	if text == "" {
 		return m.setStatus("nothing to copy", false)
 	}

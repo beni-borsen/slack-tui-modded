@@ -30,14 +30,21 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.FocusMsg:
+		var cmd tea.Cmd
 		if m.viewer != nil {
 			m.viewer.shown = "" // tmux may have dropped it while we were hidden
-			m.showViewer()
+			cmd = m.showViewer()
 		}
-		return m, m.resendImages()
+		return m, tea.Batch(cmd, m.resendImages())
 
 	case viewLoadedMsg:
-		m.viewerLoaded(msg)
+		return m, m.viewerLoaded(msg)
+
+	case viewFramesMsg:
+		if msg.err == nil && msg.st.ids != nil {
+			msg.st.ready = true
+			return m, m.startAnims()
+		}
 		return m, nil
 
 	case imageMsg:
@@ -50,7 +57,18 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		st.status, st.cols, st.rows, st.png = imgReady, msg.cols, msg.rows, msg.png
+		if msg.anim != nil {
+			st.anim = msg.anim // its other frames go up once it is on screen
+			return m, m.startAnims()
+		}
 		return m, nil
+
+	case framesUploadedMsg:
+		msg.st.animReady = msg.err == nil
+		return m, nil
+
+	case animTick:
+		return m, m.stepAnims(time.Now())
 
 	case emojiImgMsg:
 		if st := m.emojiImgs[msg.name]; st != nil {
@@ -58,6 +76,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				st.status, st.err = imgFailed, msg.err.Error()
 			} else {
 				st.status, st.png, st.cols, st.rows = imgReady, msg.png, 2, 1
+				if msg.anim != nil {
+					st.anim = msg.anim // its other frames go up once it is on screen
+					return m, m.startAnims()
+				}
 			}
 		}
 		return m, nil
@@ -70,6 +92,70 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.setStatus("reaction: "+msg.err.Error(), true)
 		}
 		return m, nil
+
+	case scheduledMsg:
+		return m, m.scheduledResult(msg)
+
+	case scheduledListMsg:
+		return m, m.scheduledListResult(msg)
+
+	case unscheduledMsg:
+		return m, m.unscheduledResult(msg)
+
+	case publicChansMsg:
+		return m, m.publicResult(msg)
+
+	case joinedMsg:
+		return m, m.joinedResult(msg)
+
+	case leftMsg:
+		return m, m.leftResult(msg)
+
+	case createdMsg:
+		return m, m.createdResult(msg)
+
+	case invitedMsg:
+		return m, m.invitedResult(msg)
+
+	case membersMsg:
+		return m, m.membersResult(msg)
+
+	case profileMsg:
+		return m, m.profileResult(msg)
+
+	case dmOpenedMsg:
+		return m, m.dmOpenedResult(msg)
+
+	case convFilesMsg:
+		return m, m.sharedFilesResult(msg)
+
+	case convLinksMsg:
+		m.sharedLinksResult(msg)
+		return m, nil
+
+	case fileShareMsg:
+		return m, m.fileShareResult(msg)
+
+	case bookmarkedMsg:
+		return m, m.bookmarkedResult(msg)
+
+	case pinsMsg:
+		m.pinsResult(msg)
+		return m, nil
+
+	case pinnedMsg:
+		if msg.err != nil {
+			m.setPinned(msg.conv, msg.ts, !msg.added)
+			var cmd tea.Cmd
+			if p := m.pins; p != nil && p.conv == msg.conv {
+				cmd = m.loadPins(msg.conv) // put the unpinned row back
+			}
+			return m, tea.Batch(cmd, m.setStatus(msg.err.Error(), true))
+		}
+		if msg.added {
+			return m, m.setStatus("pinned", false)
+		}
+		return m, m.setStatus("unpinned", false)
 
 	case editedMsg:
 		if msg.err != nil {
@@ -85,6 +171,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.removeMessage(msg.conv, msg.ts)
 		return m, m.setStatus("message deleted", false)
 
+	case savedMsg:
+		return m, m.savedResult(msg)
+
 	case openedMsg:
 		if msg.err != nil {
 			return m, m.setStatus("open "+msg.name+": "+msg.err.Error(), true)
@@ -94,13 +183,53 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m, m.handleKey(msg)
 
+	case searchMsg:
+		return m, m.searchResult(msg)
+
+	case cacheMsg:
+		if msg.err != nil {
+			return m, m.setStatus("cache: "+msg.err.Error(), true)
+		}
+		m.applyCache(msg.snap)
+		return m, nil
+
+	case threadCacheMsg:
+		m.applyThreadCache(msg)
+		return m, nil
+
+	case flushTick:
+		m.Flush()
+		return m, m.flushLater()
+
+	case bootRetry:
+		return m, m.boot()
+
 	case bootMsg:
 		if msg.users == nil && msg.err != nil {
+			if m.fromCache {
+				// Offline, or Slack is down: keep showing the cache and try again.
+				retry := tea.Tick(30*time.Second, func(time.Time) tea.Msg { return bootRetry{} })
+				return m, tea.Batch(retry, m.setStatus("offline, showing cached messages: "+msg.err.Error(), true))
+			}
 			m.bootErr = msg.err
 			return m, nil
 		}
 		for _, u := range msg.users {
 			m.users[u.ID] = u
+		}
+		if m.fromCache {
+			// Forget cached conversations the user has since left.
+			live := map[string]bool{}
+			for _, c := range msg.convs {
+				live[c.ID] = true
+			}
+			for id := range m.convs {
+				if !live[id] {
+					delete(m.convs, id)
+					delete(m.lists, id)
+				}
+			}
+			m.fromCache = false
 		}
 		for _, c := range msg.convs {
 			m.mergeConv(c)
@@ -116,7 +245,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// goroutine, so it runs under the program (and not after a test).
 		users, convs := msg.users, msg.convs
 		save := func() tea.Msg { names.SaveTo(names.Path(), users, convs); return nil }
-		return m, tea.Batch(cmd, m.refreshLater(), save)
+		return m, tea.Batch(cmd, m.refreshLater(), save, m.loadMe(), m.pollPresence(), m.loadScheduled())
 
 	case convsMsg:
 		if msg.err != nil {
@@ -131,14 +260,16 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.mergeConv(c)
 		}
+		var cmds []tea.Cmd
 		for id := range m.convs {
 			if !live[id] {
-				delete(m.convs, id)
+				cmds = append(cmds, m.dropConv(id)) // left or archived elsewhere
 			}
 		}
+		m.syncPublic()
 		m.rebuildSidebar()
 		m.loadInfos(fresh)
-		return m, nil
+		return m, tea.Batch(cmds...)
 
 	case infoMsg:
 		m.infoPending--
@@ -166,6 +297,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		l := m.list(msg.id)
 		l.loading = false
 		if msg.err != nil {
+			if j := m.jump; j != nil && j.conv == msg.id {
+				m.jump = nil
+			}
 			return m, m.setStatus(msg.err.Error(), true)
 		}
 		if msg.older {
@@ -177,6 +311,11 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			l.msgs, msg.hasMore = mergeFresh(l.msgs, msg.msgs, l.hasMore, msg.hasMore)
 		}
 		l.hasMore, l.loaded = msg.hasMore, true
+		m.touch(msg.id)
+		var jump tea.Cmd
+		if j := m.jump; j != nil && j.thread == "" && j.conv == msg.id {
+			jump = m.resolveJump()
+		}
 		if c := m.convs[msg.id]; c != nil && len(l.msgs) > 0 {
 			for i := len(l.msgs) - 1; i >= 0; i-- {
 				if !l.msgs[i].IsReply() {
@@ -187,7 +326,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
-		return m, nil
+		return m, jump
 
 	case repliesMsg:
 		if m.thread == nil || m.thread.conv != msg.id || m.thread.ts != msg.ts {
@@ -197,10 +336,22 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			return m, m.setStatus(msg.err.Error(), true)
 		}
-		for _, x := range m.thread.list.msgs {
-			msg.msgs = upsert(msg.msgs, x)
+		// The fetched thread is complete; keep only live replies newer than it
+		// (cached ones it no longer has were deleted).
+		if n := len(msg.msgs); n > 0 {
+			for _, x := range m.thread.list.msgs {
+				if backend.TSLess(msg.msgs[n-1].TS, x.TS) && !m.thread.cached[x.TS] {
+					msg.msgs = upsert(msg.msgs, x)
+				}
+			}
+		} else {
+			msg.msgs = m.thread.list.msgs
 		}
 		m.thread.list.msgs, m.thread.list.loaded = msg.msgs, true
+		m.touch(msg.id)
+		if j := m.jump; j != nil && j.thread != "" {
+			return m, m.resolveJump()
+		}
 		return m, nil
 
 	case sinceMsg:
@@ -229,6 +380,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Show it right away; the live event replaces it by timestamp.
 		mine := backend.Message{TS: msg.ts, ThreadTS: msg.threadTS, User: m.client.SelfID, Text: msg.text}
+		if msg.broadcast {
+			mine.SubType = "thread_broadcast"
+		}
 		m.applyMessage(msg.id, mine)
 		return m, nil
 
@@ -286,10 +440,65 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.setStatus("custom emoji: "+msg.err.Error(), true)
 		}
 		m.emoji = msg.emoji
+		if m.cache != nil {
+			m.cache.SaveEmoji(msg.emoji)
+		}
 		return m, nil
 
 	case errMsg:
 		return m, m.setStatus(msg.err.Error(), true)
+
+	case meMsg:
+		if msg.err != nil {
+			return m, m.setStatus(msg.err.Error(), true)
+		}
+		m.away = msg.away
+		return m, m.setDND(msg.dnd)
+
+	case dndMsg:
+		if msg.err != nil {
+			return m, m.setStatus(msg.err.Error(), true)
+		}
+		cmd := m.setDND(msg.dnd)
+		if until, on := msg.dnd.Until(time.Now()); on {
+			return m, tea.Batch(cmd, m.setStatus("notifications paused until "+clock(until, m.cfg.TimeFormat), false))
+		}
+		return m, tea.Batch(cmd, m.setStatus("notifications on", false))
+
+	case dndTick:
+		if msg.seq != m.dndSeq {
+			return m, nil
+		}
+		return m, m.reloadDND()
+
+	case presenceMsg:
+		for id, active := range msg.active {
+			m.presence[id] = active
+		}
+		var cmd tea.Cmd
+		if msg.poll {
+			cmd = m.presenceLater()
+		}
+		if msg.err != nil {
+			return m, tea.Batch(cmd, m.setStatus("presence: "+msg.err.Error(), true))
+		}
+		return m, cmd
+
+	case presenceTick:
+		return m, m.pollPresence()
+
+	case statusSetMsg:
+		return m, m.statusSet(msg)
+
+	case awayMsg:
+		if msg.err != nil {
+			return m, m.setStatus(msg.err.Error(), true)
+		}
+		m.away = msg.away
+		if msg.away {
+			return m, m.setStatus("you show as away", false)
+		}
+		return m, m.setStatus("you show as active when Slack sees you", false)
 
 	case markTick:
 		if m.markSeq[msg.id] == msg.seq && m.current == msg.id {
@@ -303,7 +512,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			ids = append(ids, c.ID)
 		}
 		m.loadInfos(ids)
-		return m, m.refreshLater()
+		return m, tea.Batch(m.refreshLater(), m.loadScheduled())
 
 	case statusClear:
 		if msg.seq == m.statusSeq {
@@ -335,6 +544,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.applyReaction(msg)
 		return m, m.waitEvent()
 
+	case backend.EvPin:
+		return m, tea.Batch(m.pinEvent(msg), m.waitEvent())
+
 	case backend.EvConversationsChanged:
 		return m, tea.Batch(m.reloadConvs(), m.waitEvent())
 
@@ -344,6 +556,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case backend.EvUserChanged:
 		m.users[msg.User.ID] = msg.User
 		return m, m.waitEvent()
+
+	case backend.EvDND:
+		return m, tea.Batch(m.setDND(msg.DND), m.waitEvent())
 	}
 
 	if m.insert {
@@ -356,6 +571,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // applyMessage adds a message to every view that shows it.
 func (m *Model) applyMessage(convID string, msg backend.Message) {
+	defer m.touch(convID)
 	if msg.IsReply() || msg.SubType == "thread_broadcast" {
 		if t := m.thread; t != nil && t.conv == convID && t.ts == msg.ThreadTS {
 			t.list.msgs = upsert(t.list.msgs, msg)
@@ -431,6 +647,7 @@ func (m *Model) onMessage(ev backend.EvMessage) tea.Cmd {
 }
 
 func (m *Model) editMessage(convID string, msg backend.Message) {
+	m.touch(convID)
 	replace := func(msgs []backend.Message) {
 		for i := range msgs {
 			if msgs[i].TS == msg.TS {
@@ -445,6 +662,9 @@ func (m *Model) editMessage(convID string, msg backend.Message) {
 				}
 				if msg.Files == nil {
 					msg.Files = msgs[i].Files
+				}
+				if !msg.Pinned { // pins change through their own events too
+					msg.Pinned = msgs[i].Pinned
 				}
 				msgs[i] = msg
 				return
@@ -463,6 +683,7 @@ func (m *Model) editMessage(convID string, msg backend.Message) {
 }
 
 func (m *Model) applyReaction(ev backend.EvReaction) {
+	m.touch(ev.Channel)
 	apply := func(msgs []backend.Message) {
 		for i := range msgs {
 			if msgs[i].TS != ev.TS {
@@ -519,6 +740,15 @@ func mergeFresh(local, fresh []backend.Message, localMore, freshMore bool) ([]ba
 		return local, localMore
 	}
 	first, last := fresh[0].TS, fresh[len(fresh)-1].TS
+	// Older messages can only be kept when they connect to the page: with
+	// more history behind it and no message in common (say, a cache from
+	// days ago), there may be a gap in between. With no more history behind
+	// it, older ones were deleted.
+	if !freshMore || !slices.ContainsFunc(local, func(x backend.Message) bool {
+		return !backend.TSLess(x.TS, first) && !backend.TSLess(last, x.TS)
+	}) {
+		local = slices.DeleteFunc(slices.Clone(local), func(x backend.Message) bool { return backend.TSLess(x.TS, first) })
+	}
 	var out []backend.Message
 	keptOlder := false
 	for _, x := range local {

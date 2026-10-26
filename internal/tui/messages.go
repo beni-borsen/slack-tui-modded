@@ -52,6 +52,10 @@ func (m *Model) renderList(l *msgList, width, height int, active, inThread bool)
 		}
 		all = append(all, sFaint.Render(center(hint, width)))
 	}
+	selBar := sBarDim.Render("▌") + " "
+	if active {
+		selBar = sBar.Render("▌") + " "
+	}
 	var prev *backend.Message
 	for i := range l.msgs {
 		msg := &l.msgs[i]
@@ -64,18 +68,14 @@ func (m *Model) renderList(l *msgList, width, height int, active, inThread bool)
 			pre = append(pre, sNewLine.Render(strings.Repeat("─", max(0, width-6))+" new"))
 		}
 		grouped := prev != nil && len(pre) == 0 && !(inThread && i == 1) &&
-			prev.User == msg.User && prev.BotName == msg.BotName && prev.BotID == msg.BotID &&
+			senderKey(*prev) == senderKey(*msg) &&
 			!systemSubtypes[prev.SubType] && !systemSubtypes[msg.SubType] &&
 			msg.Time().Sub(prev.Time()) < 5*time.Minute
 		body := m.messageLines(*msg, width-2, !grouped, inThread)
 
 		bar := "  "
 		if i == sel {
-			if active {
-				bar = sBar.Render("▌") + " "
-			} else {
-				bar = sBarDim.Render("▌") + " "
-			}
+			bar = selBar
 		}
 		all = append(all, pre...)
 		blocks[i].start = len(all)
@@ -86,32 +86,63 @@ func (m *Model) renderList(l *msgList, width, height int, active, inThread bool)
 		prev = msg
 	}
 
-	// Scroll: follow the bottom, or keep the selected block on screen.
+	// Scroll: follow the bottom, or keep the selected block on screen. A
+	// block taller than the pane keeps wherever j/k scrolled it to.
 	total := len(all)
 	maxTop := max(0, total-height)
-	if l.sel < 0 {
+	b := blocks[sel]
+	end := b.start + len(b.lines)
+	switch {
+	case l.sel < 0:
 		l.top = maxTop
-	} else {
-		b := blocks[sel]
-		end := b.start + len(b.lines)
+	case len(b.lines) > height:
+		l.top = min(max(l.top, b.start), end-height)
+		if sel == 0 && l.top == b.start {
+			l.top = 0
+		}
+	default:
 		if b.start < l.top {
 			l.top = b.start
 		}
 		if end > l.top+height {
-			l.top = max(b.start, end-height)
+			l.top = end - height
 		}
 		if sel == 0 {
 			l.top = 0 // show the "load older" hint and date line
 		}
 	}
 	l.top = min(max(l.top, 0), maxTop)
+	l.spans = l.spans[:0]
+	for _, b := range blocks {
+		l.spans = append(l.spans, span{b.start, len(b.lines)})
+	}
+	l.viewH, l.total = height, total
 
-	view := all[l.top:min(total, l.top+height)]
+	view := append([]string(nil), all[l.top:min(total, l.top+height)]...)
+	// A selected message cut off by the pane says so: its sender stays on
+	// the top row, and the bottom row counts the lines still below.
+	if height >= 4 && len(view) == height {
+		if above := l.top - b.start; above > 0 && end > l.top {
+			view[0] = selBar + m.stickyHead(l.msgs[sel], above+1, width-2)
+		}
+		if below := end - (l.top + height); below > 0 && b.start < l.top+height {
+			view[height-1] = selBar + sFaint.Render(fmt.Sprintf("↓ %d more %s", below+1, plural(below+1, "line", "lines")))
+		}
+	}
 	pad := make([]string, 0, height)
 	for range height - len(view) {
 		pad = append(pad, "")
 	}
 	return strings.Join(append(pad, view...), "\n")
+}
+
+// stickyHead stands in for the header of a message whose top has
+// scrolled out of view: who wrote it, when, and how much is above.
+func (m *Model) stickyHead(msg backend.Message, above, width int) string {
+	head := nameStyle(senderKey(msg)).Render(m.senderName(msg)) + "  " +
+		sTime.Render(msg.Time().Format(m.cfg.TimeFormat)) + "  " +
+		sFaint.Render(fmt.Sprintf("↑ %d more %s", above, plural(above, "line", "lines")))
+	return ansi.Truncate(head, width, "…")
 }
 
 // messageLines renders one message, wrapped to width.
@@ -123,17 +154,24 @@ func (m *Model) messageLines(msg backend.Message, width int, header, inThread bo
 		return wrap(sSystem.Render("→ ")+text+"  "+t, width)
 	}
 	if header {
-		name := nameStyle(msg.User + msg.BotName + msg.BotID).Render(m.senderName(msg))
+		name := nameStyle(senderKey(msg)).Render(m.senderName(msg))
 		if msg.User == "" && (msg.BotName != "" || msg.BotID != "") {
 			name += " " + sFaint.Render("APP")
 		}
-		lines = append(lines, name+"  "+sTime.Render(msg.Time().Format(m.cfg.TimeFormat)))
+		head := name + "  " + sTime.Render(msg.Time().Format(m.cfg.TimeFormat))
+		if msg.Pinned {
+			head += "  " + sWarn.Render(pinIcon+" pinned")
+		}
+		lines = append(lines, head)
 	}
 	text := render.Mrkdwn(msg.Text, m, mdStyles)
 	if msg.Edited {
 		text += " " + sFaint.Render("(edited)")
 	}
-	if strings.TrimSpace(msg.Text) != "" || msg.Edited {
+	if msg.Pinned && !header {
+		text += " " + sWarn.Render(pinIcon+" pinned")
+	}
+	if strings.TrimSpace(msg.Text) != "" || msg.Edited || (msg.Pinned && !header) {
 		lines = append(lines, wrap(text, width)...)
 	}
 	for _, f := range msg.Files {
@@ -170,7 +208,34 @@ func wrap(s string, width int) []string {
 	if width < 4 {
 		width = 4
 	}
-	return linksPerLine(strings.Split(ansi.Wrap(s, width, ""), "\n"))
+	var out []string
+	for _, line := range strings.Split(s, "\n") {
+		out = append(out, hang(line, width)...)
+	}
+	return linksPerLine(out)
+}
+
+// reItem is the start of a list item: "• ", "  ◦ ", "- ", "12. ".
+var reItem = regexp.MustCompile(`^ *(?:[•◦▪‣-]|\d{1,3}[.)]) +`)
+
+// hang wraps one line; a list item's later lines line up under its text,
+// not under the bullet, as in Slack.
+func hang(line string, width int) []string {
+	n := len(reItem.FindString(line)) // the bullet is plain text, so bytes line up
+	pre := line[:n]
+	w := ansi.StringWidth(pre)
+	if n == 0 || width-w < 10 {
+		return strings.Split(ansi.Wrap(line, width, ""), "\n")
+	}
+	lines := strings.Split(ansi.Wrap(line[n:], width-w, ""), "\n")
+	for i := range lines {
+		if i == 0 {
+			lines[i] = pre + lines[i]
+		} else {
+			lines[i] = strings.Repeat(" ", w) + lines[i]
+		}
+	}
+	return lines
 }
 
 var reEsc = regexp.MustCompile("\x1b\\[[0-9;:]*m|\x1b]8;[^;\x1b]*;([^\x1b]*)\x1b\\\\")

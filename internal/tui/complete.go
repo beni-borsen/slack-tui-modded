@@ -266,13 +266,21 @@ func (m *Model) acceptCompletion() {
 
 // renderCompletion draws the list that sits above the input box.
 func (m *Model) renderCompletion(w int) []string {
-	c := m.complete
+	return m.renderCompItems(m.complete)
+}
+
+func (m *Model) renderCompItems(c *completion) []string {
 	start := max(0, c.sel-completeRows+1)
 	var lines []string
 	for i := start; i < len(c.items) && i < start+completeRows; i++ {
 		it := c.items[i]
 		var row string
-		if it.emoji != "" {
+		if it.emoji != "" && it.label != "" {
+			row = m.emojiChip(it.emoji) + "  " + it.label
+			if it.detail != "" {
+				row += "  " + sDim.Render(it.detail)
+			}
+		} else if it.emoji != "" {
 			row = m.emojiChip(it.emoji) + "  " + it.insert
 		} else {
 			row = it.label

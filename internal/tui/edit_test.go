@@ -233,3 +233,24 @@ func TestMergeFresh(t *testing.T) {
 }
 
 func tabKey() tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyTab} }
+
+func TestMergeFreshGap(t *testing.T) {
+	msg := func(ts string) backend.Message { return backend.Message{TS: ts} }
+	ts := func(ms []backend.Message) (out []string) {
+		for _, x := range ms {
+			out = append(out, x.TS)
+		}
+		return out
+	}
+	// Cached messages from days ago, with more history between them and
+	// the fresh page: they must go, or the gap would look like nothing.
+	cached := []backend.Message{msg("1.0"), msg("2.0")}
+	fresh := []backend.Message{msg("50.0"), msg("51.0")}
+	if out, _ := mergeFresh(cached, fresh, true, true); strings.Join(ts(out), ",") != "50.0,51.0" {
+		t.Errorf("gap kept: %v", ts(out))
+	}
+	// No more history behind the page: older local ones were deleted.
+	if out, more := mergeFresh(cached, fresh, true, false); strings.Join(ts(out), ",") != "50.0,51.0" || more {
+		t.Errorf("deleted kept: %v more=%v", ts(out), more)
+	}
+}

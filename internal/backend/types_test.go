@@ -48,3 +48,15 @@ func TestBotNameOverride(t *testing.T) {
 		t.Errorf("BotName = %q, want the profile name", m.BotName)
 	}
 }
+
+func TestAttachmentText(t *testing.T) {
+	m := fromMsg(slack.Msg{Text: "deploy", Attachments: []slack.Attachment{
+		{Pretext: "Build <https://ci.example.com/1|#1>", Title: "api | prod", TitleLink: "https://example.com/api", Text: "passed", Fallback: "fb"},
+		{Title: "plain title", Fallback: "fb2"},
+		{Fallback: "only fallback"},
+	}})
+	want := "deploy\nBuild <https://ci.example.com/1|#1>\n<https://example.com/api|api ¦ prod>\npassed\nplain title\nonly fallback"
+	if m.Text != want {
+		t.Errorf("got\n%s\nwant\n%s", m.Text, want)
+	}
+}

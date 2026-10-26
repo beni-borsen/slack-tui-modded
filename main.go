@@ -26,6 +26,7 @@ import (
 
 	"github.com/magnusdalkvist/slack-tui/internal/auth"
 	"github.com/magnusdalkvist/slack-tui/internal/backend"
+	"github.com/magnusdalkvist/slack-tui/internal/cache"
 	"github.com/magnusdalkvist/slack-tui/internal/config"
 	"github.com/magnusdalkvist/slack-tui/internal/kitty"
 	"github.com/magnusdalkvist/slack-tui/internal/tui"
@@ -42,7 +43,7 @@ usage:
   slack -n @person message…      dry run: show who it would go to, send nothing
   slack completion bash          print the bash tab-completion script
   slack login                    store your Slack app tokens in the keyring
-  slack logout                   remove the stored tokens
+  slack logout                   remove the stored tokens and cached messages
   slack doctor                   check tokens, scopes and API access (read-only)
 
 People match on display name, full name or username; a partial name works
@@ -65,7 +66,10 @@ func main() {
 	case "logout":
 		err = auth.Delete()
 		if err == nil {
-			fmt.Println("tokens removed")
+			err = cache.RemoveAll()
+		}
+		if err == nil {
+			fmt.Println("tokens and cached messages removed")
 		}
 	case "doctor":
 		err = doctor()
@@ -130,6 +134,16 @@ func run() error {
 	}
 
 	m := tui.New(ctx, client, cfg)
+	// The cache only makes the start faster; without it everything still works.
+	if c, err := cache.Open(cache.Path(client.TeamID)); err == nil {
+		m.SetCache(c)
+		defer func() {
+			m.Flush()
+			c.Close()
+		}()
+	} else {
+		fmt.Fprintln(os.Stderr, "slack: cache off:", err)
+	}
 	// Everything written to the terminal goes through one lock: the TUI's
 	// frames and the image data.
 	out := kitty.NewSyncFile(os.Stdout)

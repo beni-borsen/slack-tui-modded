@@ -90,6 +90,9 @@ func (m *Model) scanUsers() tea.Cmd {
 			want(c.UserID)
 		}
 	}
+	for _, id := range m.memberIDs() {
+		want(id)
+	}
 	if l := m.lists[m.current]; l != nil && m.current != unreadsID {
 		scan(l.msgs)
 	}
