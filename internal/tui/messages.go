@@ -52,16 +52,23 @@ func (m *Model) renderList(l *msgList, width, height int, active, inThread bool)
 		}
 		all = append(all, sFaint.Render(center(hint, width)))
 	}
-	selBar := sBarDim.Render("▌") + " "
-	if active {
-		selBar = sBar.Render("▌") + " "
+	// The selected message has a bar down its left side; in the focused
+	// pane its rows are also tinted across the whole width.
+	selRow := func(line string) string {
+		if !active {
+			return sBarDim.Render("▌") + " " + line
+		}
+		pad := strings.Repeat(" ", max(0, width-2-ansi.StringWidth(line)))
+		return sBar.Render("▌") + tint(" "+line+pad, selBgOn)
 	}
 	var prev *backend.Message
 	for i := range l.msgs {
 		msg := &l.msgs[i]
 		var pre []string
 		if prev == nil || !sameDay(prev.Time(), msg.Time()) {
-			pre = append(pre, sDate.Render(center(dayLabel(msg.Time()), width)))
+			pre = append(pre, dayRule(dayLabel(msg.Time()), width))
+		} else if gap := msg.Time().Sub(prev.Time()); gap > 30*time.Minute {
+			pre = append(pre, gapRule(gap, width))
 		}
 		isNew := l.newSince != "" && backend.TSLess(l.newSince, msg.TS) && (prev == nil || !backend.TSLess(l.newSince, prev.TS))
 		if isNew {
@@ -73,14 +80,18 @@ func (m *Model) renderList(l *msgList, width, height int, active, inThread bool)
 			msg.Time().Sub(prev.Time()) < 5*time.Minute
 		body := m.messageLines(*msg, width-2, !grouped, inThread)
 
-		bar := "  "
-		if i == sel {
-			bar = selBar
+		// A blank line between one sender's turn and the next.
+		if prev != nil && !grouped {
+			all = append(all, "")
 		}
 		all = append(all, pre...)
 		blocks[i].start = len(all)
 		for _, b := range body {
-			all = append(all, bar+b)
+			if i == sel {
+				all = append(all, selRow(b))
+			} else {
+				all = append(all, "  "+b)
+			}
 		}
 		blocks[i].lines = body
 		prev = msg
@@ -123,10 +134,10 @@ func (m *Model) renderList(l *msgList, width, height int, active, inThread bool)
 	// the top row, and the bottom row counts the lines still below.
 	if height >= 4 && len(view) == height {
 		if above := l.top - b.start; above > 0 && end > l.top {
-			view[0] = selBar + m.stickyHead(l.msgs[sel], above+1, width-2)
+			view[0] = selRow(m.stickyHead(l.msgs[sel], above+1, width-2))
 		}
 		if below := end - (l.top + height); below > 0 && b.start < l.top+height {
-			view[height-1] = selBar + sFaint.Render(fmt.Sprintf("↓ %d more %s", below+1, plural(below+1, "line", "lines")))
+			view[height-1] = selRow(sFaint.Render(fmt.Sprintf("↓ %d more %s", below+1, plural(below+1, "line", "lines"))))
 		}
 	}
 	pad := make([]string, 0, height)
@@ -139,10 +150,19 @@ func (m *Model) renderList(l *msgList, width, height int, active, inThread bool)
 // stickyHead stands in for the header of a message whose top has
 // scrolled out of view: who wrote it, when, and how much is above.
 func (m *Model) stickyHead(msg backend.Message, above, width int) string {
-	head := nameStyle(senderKey(msg)).Render(m.senderName(msg)) + "  " +
+	head := m.senderLabel(msg) + "  " +
 		sTime.Render(msg.Time().Format(m.cfg.TimeFormat)) + "  " +
 		sFaint.Render(fmt.Sprintf("↑ %d more %s", above, plural(above, "line", "lines")))
 	return ansi.Truncate(head, width, "…")
+}
+
+// senderLabel is the coloured name over a message; the user's own read
+// "you", in a muted tone.
+func (m *Model) senderLabel(msg backend.Message) string {
+	if msg.User != "" && msg.User == m.client.SelfID {
+		return sOwnName.Render("you")
+	}
+	return nameStyle(senderKey(msg)).Render(m.senderName(msg))
 }
 
 // messageLines renders one message, wrapped to width.
@@ -154,7 +174,7 @@ func (m *Model) messageLines(msg backend.Message, width int, header, inThread bo
 		return wrap(sSystem.Render("→ ")+text+"  "+t, width)
 	}
 	if header {
-		name := nameStyle(senderKey(msg)).Render(m.senderName(msg))
+		name := m.senderLabel(msg)
 		if msg.User == "" && (msg.BotName != "" || msg.BotID != "") {
 			name += " " + sFaint.Render("APP")
 		}
@@ -164,6 +184,9 @@ func (m *Model) messageLines(msg backend.Message, width int, header, inThread bo
 		}
 		lines = append(lines, head)
 	}
+	// The body sits two columns in, under the sender's name.
+	const in = "  "
+	width -= len(in)
 	text := render.Mrkdwn(msg.Text, m, mdStyles)
 	if msg.Edited {
 		text += " " + sFaint.Render("(edited)")
@@ -172,10 +195,19 @@ func (m *Model) messageLines(msg backend.Message, width int, header, inThread bo
 		text += " " + sWarn.Render(pinIcon+" pinned")
 	}
 	if strings.TrimSpace(msg.Text) != "" || msg.Edited || (msg.Pinned && !header) {
-		lines = append(lines, wrap(text, width)...)
+		// Your own text is a little dimmer, so the replies stand out.
+		fg := otherTextOn
+		if msg.User != "" && msg.User == m.client.SelfID {
+			fg = ownTextOn
+		}
+		for _, l := range wrap(text, width) {
+			lines = append(lines, in+tint(l, fg))
+		}
 	}
 	for _, f := range msg.Files {
-		lines = append(lines, m.imageLines(f, width)...)
+		for _, l := range m.imageLines(f, width) {
+			lines = append(lines, in+l)
+		}
 	}
 	if len(msg.Reactions) > 0 {
 		var chips []string
@@ -189,17 +221,19 @@ func (m *Model) messageLines(msg backend.Message, width int, header, inThread bo
 			}
 			chips = append(chips, style.Render(chip))
 		}
-		lines = append(lines, wrap(strings.Join(chips, " "), width)...)
+		for _, l := range wrap(strings.Join(chips, " "), width) {
+			lines = append(lines, in+l)
+		}
 	}
 	if !inThread && msg.ReplyCount > 0 {
 		s := fmt.Sprintf("%d %s", msg.ReplyCount, plural(msg.ReplyCount, "reply", "replies"))
 		if msg.LatestReply != "" {
 			s += sDim.Render(" · last " + relTime(backend.TSTime(msg.LatestReply), m.cfg.TimeFormat))
 		}
-		lines = append(lines, sThread.Render(s))
+		lines = append(lines, in+sThread.Render(s))
 	}
 	if len(lines) == 0 {
-		lines = append(lines, sFaint.Render("(empty message)"))
+		lines = append(lines, in+sFaint.Render("(empty message)"))
 	}
 	return lines
 }
@@ -298,18 +332,45 @@ func sameDay(a, b time.Time) bool {
 	return ay == by && am == bm && ad == bd
 }
 
+// dayLabel names a day for its divider: "Today · Mon 26 Oct", "Thu 22 Oct",
+// with the year when it isn't this one.
 func dayLabel(t time.Time) string {
 	now := time.Now()
+	date := t.Format("Mon 2 Jan")
+	if t.Year() != now.Year() {
+		date = t.Format("Mon 2 Jan 2006")
+	}
 	switch {
 	case sameDay(t, now):
-		return "Today"
+		return "Today · " + date
 	case sameDay(t, now.AddDate(0, 0, -1)):
-		return "Yesterday"
-	case t.Year() == now.Year():
-		return t.Format("Monday, 2 January")
-	default:
-		return t.Format("Monday, 2 January 2006")
+		return "Yesterday · " + date
 	}
+	return date
+}
+
+// dayRule is a full-width divider with the day in the middle.
+func dayRule(label string, width int) string {
+	return labelRule(label, "─", sDim, width)
+}
+
+// gapRule marks a pause of more than half an hour between messages.
+func gapRule(d time.Duration, width int) string {
+	label := fmt.Sprintf("%d min later", int(d/time.Minute))
+	if d >= time.Hour {
+		label = fmt.Sprintf("%d h later", int(d.Round(time.Hour)/time.Hour))
+	}
+	return labelRule(label, "╌", sFaint, width)
+}
+
+func labelRule(label, line string, style lipgloss.Style, width int) string {
+	w := ansi.StringWidth(label) + 2
+	if w >= width {
+		return style.Render(ansi.Truncate(label, width, "…"))
+	}
+	left := (width - w) / 2
+	return sFaint.Render(strings.Repeat(line, left)) + style.Render(" "+label+" ") +
+		sFaint.Render(strings.Repeat(line, width-w-left))
 }
 
 func relTime(t time.Time, layout string) string {

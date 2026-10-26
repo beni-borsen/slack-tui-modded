@@ -2,6 +2,7 @@ package tui
 
 import (
 	"hash/fnv"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
@@ -19,15 +20,18 @@ var (
 	// cSelBg as raw SGR, for content that sets its own foreground.
 	selBgOn  string
 	selBgOff = "\x1b[49m"
+	// Message text colours as raw SGR, laid under the rendered markdown.
+	ownTextOn, otherTextOn string
 
 	nameColors []lipgloss.Color
 )
 
 var (
-	sDim, sFaint, sNormal, sUnread, sHeader, sActive, sCursor, sBadge lipgloss.Style
-	sTitle, sTopic, sBar, sBarDim, sTime, sSystem, sNewLine, sDate    lipgloss.Style
-	sThread, sReaction, sReactSelf, sStatusBar, sModeN, sModeI, sOK   lipgloss.Style
-	sWarn, sErr, sBox, sKey                                           lipgloss.Style
+	sDim, sFaint, sNormal, sUnread, sHeader, sActive, sCursor, sBadge    lipgloss.Style
+	sTitle, sTopic, sBar, sBarDim, sTime, sSystem, sNewLine              lipgloss.Style
+	sThread, sReaction, sReactSelf, sStatusBar, sModeN, sModeI, sOK      lipgloss.Style
+	sWarn, sErr, sBox, sKey, sOwnName, sUnreadsBadge, sPresent, sKeyHint lipgloss.Style
+	sBorder, sBorderFocus, sGroup                                        lipgloss.Style
 
 	mdStyles render.Styles
 )
@@ -47,11 +51,9 @@ func ApplyTheme(t config.Theme) {
 	cSelf = c(t.Self)
 	cCodeBg = c(t.CodeBg)
 	cSelBg = c(t.SelectionBg)
-	if seq := lipgloss.ColorProfile().Color(t.SelectionBg).Sequence(true); seq != "" {
-		selBgOn = termenv.CSI + seq + "m"
-	} else {
-		selBgOn = ""
-	}
+	selBgOn = sgr(t.SelectionBg, true)
+	ownTextOn = sgr(t.OwnText, false)
+	otherTextOn = sgr(t.OtherText, false)
 	cOK = c(t.OK)
 	cWarn = c(t.Warn)
 	contrast := c(t.ContrastFg)
@@ -69,6 +71,13 @@ func ApplyTheme(t config.Theme) {
 	sActive = lipgloss.NewStyle().Foreground(cUnread).Background(cSelBg)
 	sCursor = lipgloss.NewStyle().Background(cSelBg)
 	sBadge = lipgloss.NewStyle().Foreground(c(t.BadgeFg)).Background(cMention).Bold(true).Padding(0, 1)
+	sUnreadsBadge = lipgloss.NewStyle().Foreground(contrast).Background(c(t.UnreadsBadge)).Bold(true).Padding(0, 1)
+	sOwnName = lipgloss.NewStyle().Foreground(c(t.OwnName)).Bold(true)
+	sPresent = lipgloss.NewStyle().Foreground(cOK)
+	sKeyHint = lipgloss.NewStyle().Foreground(cFg)
+	sBorder = lipgloss.NewStyle().Foreground(cFaint)
+	sBorderFocus = lipgloss.NewStyle().Foreground(cAccent)
+	sGroup = lipgloss.NewStyle().Foreground(cAccent)
 	sTitle = lipgloss.NewStyle().Foreground(cUnread).Bold(true)
 	sTopic = lipgloss.NewStyle().Foreground(cDim)
 	sBar = lipgloss.NewStyle().Foreground(cAccent)
@@ -76,7 +85,6 @@ func ApplyTheme(t config.Theme) {
 	sTime = lipgloss.NewStyle().Foreground(cDim)
 	sSystem = lipgloss.NewStyle().Foreground(cDim).Italic(true)
 	sNewLine = lipgloss.NewStyle().Foreground(cMention)
-	sDate = lipgloss.NewStyle().Foreground(cDim).Bold(true)
 	sThread = lipgloss.NewStyle().Foreground(cAccent)
 	sReaction = lipgloss.NewStyle().Foreground(cFg).Background(cCodeBg).Padding(0, 1)
 	sReactSelf = lipgloss.NewStyle().Foreground(cUnread).Background(c(t.ReactionSelfBg)).Padding(0, 1)
@@ -103,6 +111,26 @@ func ApplyTheme(t config.Theme) {
 		UnknownEmoji: lipgloss.NewStyle().Foreground(cDim),
 		CustomEmoji:  lipgloss.NewStyle().Foreground(c(t.CustomEmoji)).Background(cCodeBg),
 	}
+}
+
+// sgr is a colour as a raw SGR sequence: background or foreground.
+func sgr(color string, bg bool) string {
+	if seq := lipgloss.ColorProfile().Color(color).Sequence(bg); seq != "" {
+		return termenv.CSI + seq + "m"
+	}
+	return ""
+}
+
+// tint lays a colour (a raw SGR sequence) under a rendered line: it is set
+// at the start and again after every reset, so styled parts keep their own
+// colours and plain text takes this one.
+func tint(line, on string) string {
+	if on == "" {
+		return line
+	}
+	line = strings.ReplaceAll(line, "\x1b[0m", "\x1b[0m"+on)
+	line = strings.ReplaceAll(line, "\x1b[m", "\x1b[m"+on)
+	return on + line + "\x1b[0m"
 }
 
 // senderKey is who a message is from, for its name colour and grouping: the

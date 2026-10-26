@@ -175,17 +175,25 @@ func (m *Model) renderProfile(width int) string {
 	return sBox.Width(boxW - 2).Render(strings.Join(rows, "\n"))
 }
 
-// localTime is the person's clock now, and how far it is from ours:
-// "16:04  Central European Summer Time · 1 h ahead".
-func localTime(u backend.User, now time.Time, layout string) string {
+// theirClock is now in the person's time zone, if their profile has one.
+func theirClock(u backend.User, now time.Time) (time.Time, bool) {
 	if u.TZ == "" && u.TZOffset == 0 {
-		return ""
+		return time.Time{}, false
 	}
 	loc, err := time.LoadLocation(u.TZ)
 	if err != nil || u.TZ == "" {
 		loc = time.FixedZone(u.TZLabel, u.TZOffset)
 	}
-	there := now.In(loc)
+	return now.In(loc), true
+}
+
+// localTime is the person's clock now, and how far it is from ours:
+// "16:04  Central European Summer Time · 1 h ahead".
+func localTime(u backend.User, now time.Time, layout string) string {
+	there, ok := theirClock(u, now)
+	if !ok {
+		return ""
+	}
 	s := there.Format(layout)
 	if u.TZLabel != "" {
 		s += "  " + sDim.Render(u.TZLabel)

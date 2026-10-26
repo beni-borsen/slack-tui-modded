@@ -36,57 +36,83 @@ func (m *Model) View() string {
 	if m.sideHidden {
 		mainW = m.width
 	}
+	// Every pane is framed; the focused one in the accent colour.
+	iw, ih := mainW-2, h-2
+	onMain := m.focus != fSidebar
 
 	var main string
+	split := false // the conversation and thread side by side, framed apart
 	switch {
 	case m.switcher != nil:
-		main = lipgloss.Place(mainW, h, lipgloss.Center, lipgloss.Top, "\n\n"+m.renderSwitcher(mainW, h))
+		main = lipgloss.Place(iw, ih, lipgloss.Center, lipgloss.Top, "\n\n"+m.renderSwitcher(iw, ih))
 	case m.picker != nil:
-		main = lipgloss.Place(mainW, h, lipgloss.Center, lipgloss.Top, "\n\n"+m.renderPicker(mainW, h))
+		main = lipgloss.Place(iw, ih, lipgloss.Center, lipgloss.Top, "\n\n"+m.renderPicker(iw, ih))
 	case m.opener != nil:
-		main = lipgloss.Place(mainW, h, lipgloss.Center, lipgloss.Top, "\n\n"+m.renderOpener(mainW))
+		main = lipgloss.Place(iw, ih, lipgloss.Center, lipgloss.Top, "\n\n"+m.renderOpener(iw))
 	case m.profile != nil:
-		main = lipgloss.Place(mainW, h, lipgloss.Center, lipgloss.Top, "\n\n"+m.renderProfile(mainW))
+		main = lipgloss.Place(iw, ih, lipgloss.Center, lipgloss.Top, "\n\n"+m.renderProfile(iw))
 	case m.help != nil:
-		main = lipgloss.Place(mainW, h, lipgloss.Center, lipgloss.Top, "\n"+m.renderHelp(mainW, h-1))
+		main = lipgloss.Place(iw, ih, lipgloss.Center, lipgloss.Top, "\n"+m.renderHelp(iw, ih-1))
 	case m.search != nil && m.search.open:
-		main = m.renderSearch(mainW, h)
+		main = m.renderSearch(iw, ih)
 	case m.pins != nil:
-		main = m.renderPins(mainW, h)
+		main = m.renderPins(iw, ih)
 	case m.sched != nil:
-		main = m.renderScheduled(mainW, h)
+		main = m.renderScheduled(iw, ih)
 	case m.chans != nil:
-		main = m.renderChans(mainW, h)
+		main = m.renderChans(iw, ih)
 	case m.members != nil:
-		main = m.renderMembers(mainW, h)
+		main = m.renderMembers(iw, ih)
 	case m.shared != nil:
-		main = m.renderShared(mainW, h)
+		main = m.renderShared(iw, ih)
 	case m.current == unreadsID:
-		main = m.renderUnreads(mainW, h)
+		main = m.renderUnreads(iw, ih)
 	case m.thread != nil && mainW >= 80:
 		tw := mainW * 45 / 100
-		cw := mainW - tw - 1
+		cw := mainW - tw
+		split = true
 		main = lipgloss.JoinHorizontal(lipgloss.Top,
-			fit(m.renderConvPane(cw, h), cw, h), vline(h), fit(m.renderThreadPane(tw, h), tw, h))
+			frame(m.renderConvPane(cw-2, ih), cw, h, m.focus == fMessages),
+			frame(m.renderThreadPane(tw-2, ih), tw, h, m.focus == fThread))
 	case m.thread != nil:
-		main = m.renderThreadPane(mainW, h)
+		main = m.renderThreadPane(iw, ih)
 	default:
-		main = m.renderConvPane(mainW, h)
+		main = m.renderConvPane(iw, ih)
+	}
+	if !split {
+		main = frame(main, mainW, h, onMain)
 	}
 
 	var body string
 	switch {
 	case m.sideHidden:
-		body = fit(main, mainW, h)
+		body = main
 	case m.sideRight:
-		body = lipgloss.JoinHorizontal(lipgloss.Top, fit(main, mainW, h), vline(h), fit(m.renderSidebar(sw, h), sw, h))
+		body = lipgloss.JoinHorizontal(lipgloss.Top, main, frame(m.renderSidebar(sw-1, ih), sw+1, h, !onMain))
 	default:
-		body = lipgloss.JoinHorizontal(lipgloss.Top, fit(m.renderSidebar(sw, h), sw, h), vline(h), fit(main, mainW, h))
+		body = lipgloss.JoinHorizontal(lipgloss.Top, frame(m.renderSidebar(sw-1, ih), sw+1, h, !onMain), main)
 	}
 	if m.cmd != nil {
 		return m.overlayCmdCompletion(body) + "\n" + m.renderCmdLine()
 	}
 	return body + "\n" + m.renderStatus()
+}
+
+// frame draws a rounded border round s, fitted to (w-2)×(h-2): in the
+// accent colour on the focused pane, faint on the others.
+func frame(s string, w, h int, focused bool) string {
+	st := sBorder
+	if focused {
+		st = sBorderFocus
+	}
+	side := st.Render("│")
+	out := make([]string, 0, h)
+	out = append(out, st.Render("╭"+strings.Repeat("─", max(0, w-2))+"╮"))
+	for _, l := range strings.Split(fit(s, w-2, h-2), "\n") {
+		out = append(out, side+l+side)
+	}
+	out = append(out, st.Render("╰"+strings.Repeat("─", max(0, w-2))+"╯"))
+	return strings.Join(out, "\n")
 }
 
 // fit forces s to exactly w×h cells so panes line up.
@@ -106,10 +132,6 @@ func fit(s string, w, h int) string {
 		lines[i] = l
 	}
 	return strings.Join(lines, "\n")
-}
-
-func vline(h int) string {
-	return sFaint.Render(strings.TrimSuffix(strings.Repeat("│\n", h), "\n"))
 }
 
 func rule(w int, active bool) string {
@@ -135,58 +157,106 @@ func (m *Model) renderConvPane(w, h int) string {
 	if c == nil {
 		return placeholder("conversation not found", w, h)
 	}
-	title := sTitle.Render(m.convTitle(c))
-	if c.Kind == backend.KindDM && c.UserID != m.client.SelfID {
-		if m.presence[c.UserID] {
-			title += " " + sOK.Render(onlineDot)
-		}
-		if line := m.statusLine(c.UserID); line != "" {
-			if exp := m.users[c.UserID].StatusExpires; exp > 0 {
-				line += sDim.Render(" until " + clock(time.Unix(exp, 0), m.cfg.TimeFormat))
-			}
-			title += "  " + line
-		}
-	}
-	if n := m.scheduledIn(c.ID); n > 0 {
-		title += "  " + sWarn.Render(fmt.Sprintf("%s %d scheduled", schedIcon, n))
-	}
-	if c.Topic != "" {
-		title += "  " + sTopic.Render(strings.ReplaceAll(render.Mrkdwn(c.Topic, m, mdStyles), "\n", " "))
-	}
-	header := []string{ansi.Truncate(title, w, "…"), rule(w, m.focus == fMessages)}
+	header := []string{m.paneHeader(m.convHeader(c), "MESSAGES", m.focus == fMessages, w), rule(w, false)}
 
 	isTarget := !(m.focus == fThread && m.thread != nil)
-	input := m.renderInput(w, isTarget, "message "+m.convTitle(c))
+	who := "#" + c.Name
+	if c.IsDM() {
+		who = m.convLabel(c)
+	}
+	input := m.renderInput(w, isTarget, "Message "+who)
 	bodyH := max(1, h-len(header)-lineCount(input))
 	list := m.renderList(m.lists[m.current], w, bodyH, m.focus == fMessages, false)
 	return strings.Join(append(header, list, input), "\n")
 }
 
+// sep is the divider between the parts of a pane header.
+func sep() string { return sFaint.Render(" │ ") }
+
+// convHeader is the top line of a conversation: for a person, presence,
+// name, status and their local time; for a channel, its name, topic and
+// size.
+func (m *Model) convHeader(c *backend.Conversation) string {
+	parts := []string{sTitle.Render(m.convTitle(c))}
+	switch {
+	case c.Kind == backend.KindDM && c.UserID != m.client.SelfID:
+		dot := sFaint.Render(awayDot)
+		if m.presence[c.UserID] {
+			dot = sPresent.Render(onlineDot)
+		}
+		parts[0] = dot + " " + parts[0]
+		u := m.users[c.UserID]
+		if _, text := u.Status(time.Now()); text != "" {
+			// "In a meeting • Google Calendar": the source is noise here.
+			text, _, _ = strings.Cut(text, " • ")
+			st := sWarn.Render(strings.ReplaceAll(render.Mrkdwn(text, m, mdStyles), "\n", " "))
+			if u.StatusExpires > 0 {
+				st += sDim.Render(" until " + clock(time.Unix(u.StatusExpires, 0), m.cfg.TimeFormat))
+			}
+			parts = append(parts, st)
+		}
+		if t, ok := theirClock(u, time.Now()); ok {
+			parts = append(parts, sDim.Render("local "+t.Format(m.cfg.TimeFormat)))
+		}
+	case c.Kind == backend.KindGroup:
+		parts[0] = sGroup.Render(groupIcon) + " " + parts[0]
+	default:
+		if c.Topic != "" {
+			parts = append(parts, sTopic.Render(strings.ReplaceAll(render.Mrkdwn(c.Topic, m, mdStyles), "\n", " ")))
+		}
+		if c.Members > 0 {
+			parts = append(parts, sDim.Render(fmt.Sprintf("%d %s", c.Members, plural(c.Members, "member", "members"))))
+		}
+	}
+	if n := m.scheduledIn(c.ID); n > 0 {
+		parts = append(parts, sWarn.Render(fmt.Sprintf("%s %d scheduled", schedIcon, n)))
+	}
+	return strings.Join(parts, sep())
+}
+
+// paneHeader puts the pane's name at the right of its title line, in the
+// accent colour while the pane has the keys.
+func (m *Model) paneHeader(title, name string, focused bool, w int) string {
+	label := sFaint.Render(name)
+	if focused {
+		label = sBar.Render(name)
+	}
+	room := w - 2 - lipgloss.Width(label) - 2
+	title = ansi.Truncate(" "+title, room, "…")
+	return title + strings.Repeat(" ", max(1, w-1-lipgloss.Width(title)-lipgloss.Width(label))) + label
+}
+
 func (m *Model) renderThreadPane(w, h int) string {
 	t := m.thread
-	where := ""
+	title := sTitle.Render("Thread")
 	if c := m.convs[t.conv]; c != nil {
-		where = sDim.Render("  in " + m.convTitle(c))
+		title += sDim.Render("  in " + m.convTitle(c))
 	}
-	header := []string{ansi.Truncate(sTitle.Render("Thread")+where, w, "…"), rule(w, m.focus == fThread)}
-	input := m.renderInput(w, m.focus == fThread, "reply in thread")
+	header := []string{m.paneHeader(title, "THREAD", m.focus == fThread, w), rule(w, false)}
+	input := m.renderInput(w, m.focus == fThread, "Reply in thread")
 	bodyH := max(1, h-len(header)-lineCount(input))
 	list := m.renderList(&t.list, w, bodyH, m.focus == fThread, true)
 	return strings.Join(append(header, list, input), "\n")
 }
 
-// renderInput shows the text box under the pane it will send to, and a
-// hint under the other one.
-func (m *Model) renderInput(w int, isTarget bool, hint string) string {
-	if !isTarget {
-		return rule(w, false) + "\n" + sFaint.Render(" ")
+// renderInput is the message box at the foot of a pane, inset a column
+// from its edges. Out of insert mode it shows a placeholder, and in the
+// pane it will send to, the keys; in insert mode its border takes the
+// accent colour and labels about the message go into the top edge.
+func (m *Model) renderInput(w int, isTarget bool, placeholder string) string {
+	bw := w - 2 // the box, inset a column on each side
+	if !m.insert || !isTarget {
+		text := sFaint.Render("› " + placeholder)
+		if isTarget {
+			hint := keyHints([][2]string{{"i", "type"}, {"⏎", "send"}, {"alt+⏎", "newline"}})
+			if gap := bw - 4 - lipgloss.Width(text) - lipgloss.Width(hint); gap >= 2 {
+				text += strings.Repeat(" ", gap) + hint
+			}
+		}
+		return inputBox([]string{text}, bw, sBorder, nil)
 	}
-	if !m.insert {
-		return rule(w, false) + "\n" + sFaint.Render("  "+sKey.Render("i")+sFaint.Render(" "+hint))
-	}
-	m.input.SetWidth(w - 2)
+	m.input.SetWidth(bw - 6)
 	m.fitInput() // the width may have changed, and with it the wrapping
-	// Labels go into the rule above the box: "── editing … ── image … ──".
 	var labels []string
 	if m.editing != nil {
 		labels = append(labels, sWarn.Render(" editing · enter save · esc cancel "))
@@ -201,15 +271,45 @@ func (m *Model) renderInput(w int, isTarget bool, hint string) string {
 	if label := m.attachLabel(); label != "" {
 		labels = append(labels, sWarn.Render(label))
 	}
-	top := rule(w, true)
-	if len(labels) > 0 {
-		bar := sBar.Render("──") + strings.Join(labels, sBar.Render("──"))
-		top = ansi.Truncate(bar+sBar.Render(strings.Repeat("─", max(0, w-lipgloss.Width(bar)))), w, "")
+	rows := strings.Split(m.input.View(), "\n")
+	for i := range rows {
+		if i == 0 {
+			rows[i] = sBar.Render("›") + " " + rows[i]
+		} else {
+			rows[i] = "  " + rows[i]
+		}
 	}
+	box := inputBox(rows, bw, sBorderFocus, labels)
 	if m.complete != nil {
-		top = strings.Join(m.renderCompletion(w), "\n") + "\n" + top
+		box = strings.Join(m.renderCompletion(w), "\n") + "\n" + box
 	}
-	return top + "\n" + indent(m.input.View(), "  ")
+	return box
+}
+
+// inputBox frames rows in a box w wide, indented one column, with labels
+// set into its top edge.
+func inputBox(rows []string, w int, st lipgloss.Style, labels []string) string {
+	top := st.Render("╭─")
+	for _, l := range labels {
+		top += l + st.Render("─")
+	}
+	top = ansi.Truncate(top, w-1, "") + st.Render(strings.Repeat("─", max(0, w-1-lipgloss.Width(top)))+"╮")
+	out := []string{" " + top}
+	for _, r := range rows {
+		r = ansi.Truncate(r, w-4, "")
+		out = append(out, " "+st.Render("│")+" "+r+strings.Repeat(" ", max(0, w-4-lipgloss.Width(r)))+" "+st.Render("│"))
+	}
+	out = append(out, " "+st.Render("╰"+strings.Repeat("─", max(0, w-2))+"╯"))
+	return strings.Join(out, "\n")
+}
+
+// keyHints renders "k desc · k desc": keys in the text colour, the rest dim.
+func keyHints(hints [][2]string) string {
+	parts := make([]string, len(hints))
+	for i, h := range hints {
+		parts[i] = sKeyHint.Render(h[0]) + sDim.Render(" "+h[1])
+	}
+	return strings.Join(parts, sDim.Render(" · "))
 }
 
 // broadcastLabel is the bar above a thread reply being written: whether it
@@ -228,14 +328,6 @@ func (m *Model) broadcastLabel() string {
 		return " also sending to " + where + " · ctrl+o undo "
 	}
 	return " ctrl+o also send to " + where + " "
-}
-
-func indent(s, prefix string) string {
-	lines := strings.Split(s, "\n")
-	for i := range lines {
-		lines[i] = prefix + lines[i]
-	}
-	return strings.Join(lines, "\n")
 }
 
 func lineCount(s string) int { return strings.Count(s, "\n") + 1 }
@@ -344,6 +436,7 @@ func (m *Model) renderStatus() string {
 	default:
 		conn = sWarn.Render("○ connecting")
 	}
+	conn += sFaint.Render(" │ ") + sBar.Render(paneNames[m.focus])
 	parts := append([]string{mode, conn}, m.meStatus()...)
 	if m.confirm != nil {
 		parts = append(parts, sWarn.Render(m.confirm.prompt))
@@ -359,10 +452,50 @@ func (m *Model) renderStatus() string {
 		}
 	}
 	left := strings.Join(parts, "  ")
-	right := sDim.Render("ctrl+k jump · / search · : command · ? help ")
+	right := keyHints(m.statusHints()) + " "
 	gap := m.width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 1 {
 		return ansi.Truncate(left, m.width, "…")
 	}
 	return left + strings.Repeat(" ", gap) + right
+}
+
+// paneNames name the focused pane in the status bar; tabNames the pane tab
+// goes to.
+var (
+	paneNames = map[focus]string{fSidebar: "sidebar", fMessages: "message", fThread: "thread"}
+	tabNames  = map[focus]string{fSidebar: "sidebar", fMessages: "messages", fThread: "thread"}
+)
+
+// statusHints are the keys for what has focus: the message box, the
+// sidebar, or a selected message; otherwise the general ones.
+func (m *Model) statusHints() [][2]string {
+	overlay := m.switcher != nil || m.picker != nil || m.opener != nil || m.profile != nil ||
+		m.help != nil || (m.search != nil && m.search.open) || m.pins != nil || m.sched != nil ||
+		m.chans != nil || m.members != nil || m.shared != nil
+	switch {
+	case m.insert:
+		return [][2]string{{"esc", "normal"}, {"⏎", "send"}, {"alt+⏎", "newline"}}
+	case overlay:
+	case m.focus == fSidebar:
+		return [][2]string{{"⏎", "open"}, {"r", "mark read"}, {"M", "mute"}, {"tab", tabNames[m.nextFocus()]}, {"?", "help"}}
+	case m.focus == fThread && m.thread != nil && len(m.thread.list.msgs) > 0:
+		return [][2]string{{"i", "reply"}, {"+", "react"}, {"c", "copy"}, {"tab", tabNames[m.nextFocus()]}, {"?", "help"}}
+	case m.focus == fMessages && m.current != unreadsID && m.lists[m.current] != nil && len(m.lists[m.current].msgs) > 0:
+		return [][2]string{{"t", "reply"}, {"+", "react"}, {"c", "copy"}, {"tab", tabNames[m.nextFocus()]}, {"?", "help"}}
+	}
+	return [][2]string{{"ctrl+k", "jump"}, {"/", "search"}, {":", "command"}, {"?", "help"}}
+}
+
+// nextFocus is the pane tab moves to.
+func (m *Model) nextFocus() focus {
+	n := 2
+	if m.thread != nil {
+		n = 3
+	}
+	f := focus((int(m.focus) + 1) % n)
+	if f == fSidebar && m.sideHidden {
+		f = focus((int(f) + 1) % n)
+	}
+	return f
 }

@@ -57,8 +57,9 @@ image_max_rows = 12
 image_viewer = "loupe"    # opens images with `o` (default: loupe if installed); other files use xdg-open
 download_dir = "~/Downloads"  # where `s` saves files (default: the desktop's Downloads folder)
 
-# Custom sidebar sections, above the built-in Channels, Direct messages (one-to-one first,
-# then groups, each by recent activity) and External (Slack Connect channels and people).
+# Custom sidebar sections, above the built-in Channels, Direct messages (by recent activity;
+# the newest 10, then "… N more", plus any unread), Apps (bots and Slackbot, folded at first)
+# and External (Slack Connect channels and people).
 # Slack's own sections are not in the public API.
 [[section]]
 name = "Team"
@@ -102,12 +103,16 @@ code_bg          = "236"  # code, reactions
 selection_bg     = "237"  # cursor and active row
 ok               = "114"  # insert-mode pill, success
 warn             = "215"  # warnings
-badge_fg         = "231"  # text on mention badges
+badge_fg         = "16"   # text on mention badges
 contrast_fg      = "16"   # text on mode pills and mentions of you
 reaction_self_bg = "24"   # reactions you added
 code_fg          = "217"  # inline code
 code_block_fg    = "252"  # code blocks
 custom_emoji     = "180"  # custom emoji shown as :name:
+own_name         = "245"  # "you" on your own messages
+own_text         = "250"  # the text of your own messages
+other_text       = "253"  # the text of everyone else's messages
+unreads_badge    = "209"  # the total on the Unreads row
 names = ["75", "114", "176", "215", "80", "211", "150", "179", "141", "109"]  # sender names
 ```
 
@@ -135,6 +140,7 @@ names = ["75", "114", "176", "215", "80", "211", "150", "179", "141", "109"]  # 
 | `:` | command line (below): `tab` completes, `↑` `↓` history, `esc` leaves |
 | `u` | next unread conversation |
 | `r` | mark conversation read |
+| `M` (sidebar) | mute / unmute the conversation: it moves into the `+ N muted` row at the end of its section (`enter` there lists them) and stops counting as unread unless it mentions you. Slack's API can't read or set mutes, so these are this client's own |
 | `U` | mark unread from the selected message: the read marker moves to just before it, in Slack too, until you read to the bottom or open it again (not for thread replies: the API can't) |
 | `I` | profile of the message's sender, or of the DM's person in the sidebar: name, title, pronouns, status, local time and how far ahead or behind, email, phone; `enter` writes to them, `c` copies the email (also `:profile @person`) |
 | `c` | copy the selected message's text (OSC 52, so it works through tmux and ssh) |
@@ -171,8 +177,9 @@ names = ["75", "114", "176", "215", "80", "211", "150", "179", "141", "109"]  # 
 | `:away` / `:back` | show as away / let Slack decide again |
 
 A unique prefix is enough (`:st`, `:d 1h`). Your DND, away state and status sit in the status bar.
-People in the DM list get a green dot after their name while active (checked every `presence_minutes`) and their
-status emoji after the name; the open DM's header shows their status and when it ends.
+People in the DM list have a green `●` in front of their name while active (`○` while away; checked every
+`presence_minutes`) and their status emoji on the right; the open DM's header shows their status, when it ends,
+and their local time.
 
 ## Images
 

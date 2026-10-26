@@ -102,7 +102,10 @@ func (c *Client) Conversations(ctx context.Context) ([]Conversation, error) {
 }
 
 func fromChannel(ch slack.Channel) Conversation {
-	c := Conversation{ID: ch.ID, Name: ch.Name, Topic: ch.Topic.Value, LastRead: ch.LastRead, External: ch.IsExtShared}
+	c := Conversation{
+		ID: ch.ID, Name: ch.Name, Topic: ch.Topic.Value, LastRead: ch.LastRead, External: ch.IsExtShared,
+		Members: ch.NumMembers,
+	}
 	switch {
 	case ch.IsIM:
 		c.Kind, c.UserID, c.Name = KindDM, ch.User, ch.User
@@ -125,7 +128,7 @@ func fromChannel(ch slack.Channel) Conversation {
 func (c *Client) Info(ctx context.Context, id string) (Conversation, error) {
 	var ch *slack.Channel
 	err := retry(ctx, func() (err error) {
-		ch, err = c.api.GetConversationInfoContext(ctx, &slack.GetConversationInfoInput{ChannelID: id})
+		ch, err = c.api.GetConversationInfoContext(ctx, &slack.GetConversationInfoInput{ChannelID: id, IncludeNumMembers: true})
 		return err
 	})
 	if err != nil {

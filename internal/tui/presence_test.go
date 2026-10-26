@@ -181,30 +181,25 @@ func TestStatusAndPresenceShown(t *testing.T) {
 			t.Errorf("status bar lacks %q: %q", want, status)
 		}
 	}
-	// Anna is active: a green dot (colour 114) after her name, then her
-	// status. Bob is away: no dot. Icons keep the row's colour.
-	if !strings.Contains(v, "Anna Jensen ● 🏠") {
-		t.Errorf("Anna's dot and status emoji missing from the sidebar")
-	}
-	if strings.Contains(v, "Bob ●") || strings.Contains(v, "🚗") {
-		t.Errorf("Bob is away and his status expired: no dot, no emoji")
-	}
+	// Presence leads the row, in one column: Anna is active (a green ●),
+	// Bob is away (○). Status emoji sit on the right.
 	rows := 0
 	for _, l := range strings.Split(raw, "\n") {
 		plain := ansi.Strip(l)
 		switch {
-		case strings.Contains(plain, userIcon+" Anna Jensen"):
-			if !strings.Contains(l, "38;5;114m ●") {
+		case strings.Contains(plain, onlineDot+" Anna Jensen"):
+			if !strings.Contains(l, "38;5;114m"+onlineDot) {
 				t.Errorf("Anna's dot not green: %q", l)
 			}
+			if !strings.Contains(plain, "🏠") {
+				t.Errorf("Anna's status emoji missing: %q", plain)
+			}
 			rows++
-		case strings.Contains(plain, userIcon+" Bob"):
+		case strings.Contains(plain, awayDot+" Bob"):
+			if strings.Contains(plain, "🚗") {
+				t.Errorf("Bob's status expired: %q", plain)
+			}
 			rows++
-		default:
-			continue
-		}
-		if strings.Contains(l, "38;5;114m"+userIcon) || strings.Contains(l, "38;5;215m"+userIcon) {
-			t.Errorf("icon still coloured by presence: %q", l)
 		}
 	}
 	if rows != 2 {
@@ -213,7 +208,7 @@ func TestStatusAndPresenceShown(t *testing.T) {
 
 	m.open("D1")
 	v = dump(t, m)
-	if !strings.Contains(v, "Anna Jensen ●  🏠 WFH") {
+	if !strings.Contains(v, "● Anna Jensen │ WFH") {
 		t.Errorf("DM header lacks presence and status")
 	}
 

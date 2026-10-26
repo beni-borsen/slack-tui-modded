@@ -199,6 +199,8 @@ func (m *Model) sidebarKey(k tea.KeyMsg) tea.Cmd {
 		m.moveSide(-10)
 	case "z":
 		return m.toggleFold()
+	case "M":
+		return m.toggleMute()
 	case "h", "left":
 		if m.sideRight {
 			m.focus = fMessages
@@ -212,9 +214,15 @@ func (m *Model) sidebarKey(k tea.KeyMsg) tea.Cmd {
 		if m.sideCur >= len(m.side) {
 			return nil
 		}
-		if it := m.side[m.sideCur]; it.header != "" {
+		switch it := m.side[m.sideCur]; {
+		case it.header != "":
 			return m.toggleFold()
-		} else if it.id != "" {
+		case it.more > 0:
+			m.switcher = m.newSwitcher()
+		case it.muted > 0:
+			m.showMuted = !m.showMuted
+			m.rebuildSidebar()
+		case it.id != "":
 			return m.open(it.id)
 		}
 	}
@@ -509,7 +517,7 @@ func (m *Model) nextUnread() tea.Cmd {
 	n := len(m.side)
 	for d := 1; d <= n; d++ {
 		it := m.side[(m.sideCur+d)%n]
-		if c := m.convs[it.id]; c != nil && c.Unread() && it.id != m.current {
+		if c := m.convs[it.id]; c != nil && m.needsAttention(c) && it.id != m.current {
 			return m.open(it.id)
 		}
 	}

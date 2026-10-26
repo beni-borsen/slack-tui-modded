@@ -36,6 +36,7 @@ var helpKeys = [][2]string{
 	{"r", "mark conversation read"},
 	{"U", "mark unread from the message"},
 	{"z  enter on header", "fold / unfold sidebar section"},
+	{"M  (sidebar)", "mute / unmute the conversation (this client only)"},
 	{"}", "move the sidebar to the other side"},
 	{"]", "hide / show the sidebar"},
 	{"+", "react to the message"},

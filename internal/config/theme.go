@@ -34,6 +34,10 @@ type Theme struct {
 	CodeFg         string `toml:"code_fg"`          // inline code
 	CodeBlockFg    string `toml:"code_block_fg"`    // code blocks
 	CustomEmoji    string `toml:"custom_emoji"`     // custom emoji shown as :name:
+	OwnName        string `toml:"own_name"`         // "you" on your own messages
+	OwnText        string `toml:"own_text"`         // the text of your own messages
+	OtherText      string `toml:"other_text"`       // the text of everyone else's messages
+	UnreadsBadge   string `toml:"unreads_badge"`    // the total on the Unreads row
 	// Names are the colors sender names are picked from.
 	Names []string `toml:"names"`
 }
@@ -51,12 +55,16 @@ func DefaultTheme() Theme {
 		SelectionBg:    "237",
 		OK:             "114",
 		Warn:           "215",
-		BadgeFg:        "231",
+		BadgeFg:        "16",
 		ContrastFg:     "16",
 		ReactionSelfBg: "24",
 		CodeFg:         "217",
 		CodeBlockFg:    "252",
 		CustomEmoji:    "180",
+		OwnName:        "245",
+		OwnText:        "250",
+		OtherText:      "253",
+		UnreadsBadge:   "209",
 		Names:          []string{"75", "114", "176", "215", "80", "211", "150", "179", "141", "109"},
 	}
 }

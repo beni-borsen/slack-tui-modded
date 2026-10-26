@@ -34,12 +34,13 @@ const unreadsID = "\x00unreads"
 const (
 	unreadsIcon = "\U000f0117"
 	userIcon    = "\uf007"
-	groupIcon   = "\uedca"
+	groupIcon   = "⁂"      // one cell wide, so group names line up with the rest
 	lockIcon    = "\uf456" // private channels
 	dndIcon     = "\uf186" // moon, for Do Not Disturb
 	pinIcon     = "\uf435" // after the time of pinned messages
 	schedIcon   = "\uf017" // clock, for scheduled messages
-	onlineDot   = "●"      // after the names of people who are active
+	onlineDot   = "●"      // people who are active
+	awayDot     = "○"      // people who are away
 )
 
 const pageSize = 50
@@ -139,6 +140,8 @@ type Model struct {
 	markSeq     map[string]int
 	seenReplies map[string]bool // conv/ts of live replies already counted
 	folded      map[string]bool // sidebar sections that are collapsed
+	muted       map[string]bool // conversations muted in this client
+	showMuted   bool            // the sidebar lists muted conversations
 	sideRight   bool            // sidebar on the right
 	sideHidden  bool            // sidebar not shown
 	emoji       map[string]string
@@ -209,6 +212,7 @@ func New(ctx context.Context, client *backend.Client, cfg config.Config) *Model 
 		markSeq:       map[string]int{},
 		seenReplies:   map[string]bool{},
 		folded:        map[string]bool{},
+		muted:         map[string]bool{},
 		emoji:         map[string]string{},
 		images:        map[string]*imgState{},
 		composeTokens: map[string]string{},
@@ -285,8 +289,14 @@ type statusClear struct{ seq int }
 func (m *Model) Init() tea.Cmd {
 	go m.client.Listen(m.ctx, m.events)
 	st := config.LoadState()
+	for name := range foldedByDefault {
+		m.folded[name] = !slices.Contains(st.Unfolded, name)
+	}
 	for _, name := range st.Folded {
 		m.folded[name] = true
+	}
+	for _, id := range st.Muted {
+		m.muted[id] = true
 	}
 	m.sideRight, m.sideHidden = st.SidebarRight, st.SidebarHidden
 	if m.sideHidden {
@@ -507,6 +517,9 @@ func (m *Model) mergeConv(c backend.Conversation) {
 	if c.Topic != "" {
 		old.Topic = c.Topic
 	}
+	if c.Members > 0 {
+		old.Members = c.Members
+	}
 }
 
 // markRead moves the read marker to the newest message and tells Slack.
@@ -567,7 +580,7 @@ func (m *Model) sideFind(id string) string {
 func (m *Model) unreadConvs() []*backend.Conversation {
 	var out []*backend.Conversation
 	for _, c := range m.convs {
-		if c.Unread() {
+		if m.needsAttention(c) {
 			out = append(out, c)
 		}
 	}

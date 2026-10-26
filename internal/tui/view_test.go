@@ -167,7 +167,7 @@ func TestSidebarFolding(t *testing.T) {
 		t.Error("open conversation hidden in folded section")
 	}
 	v := dump(t, m)
-	if !strings.Contains(v, "▸ \uf4df CHANNELS 1") {
+	if !strings.Contains(v, "▸ \uf4df Channels 1") {
 		t.Error("folded header should show hidden count")
 	}
 }
@@ -175,11 +175,11 @@ func TestSidebarFolding(t *testing.T) {
 func TestSectionIcon(t *testing.T) {
 	m := fakeModel(t, 110, 30)
 	m.cfg.Sections[0].Icon = ":rocket:"
-	if v := dump(t, m); !strings.Contains(v, "▾ 🚀 TEAM") {
+	if v := dump(t, m); !strings.Contains(v, "▾ 🚀 Team") {
 		t.Error("section icon missing")
 	}
 	m.cfg.Sections[0].Icon = ":partyparrot:" // custom, not loaded: no icon, no :partyparrot: text
-	if v := dump(t, m); !strings.Contains(v, "▾ TEAM") || strings.Contains(v, "partyparrot") {
+	if v := dump(t, m); !strings.Contains(v, "▾ Team") || strings.Contains(v, "partyparrot") {
 		t.Error("an unloaded custom icon should leave the plain header")
 	}
 }
@@ -187,7 +187,7 @@ func TestSectionIcon(t *testing.T) {
 func TestBuiltinSectionIcons(t *testing.T) {
 	m := fakeModel(t, 110, 30)
 	v := dump(t, m)
-	if !strings.Contains(v, "▾  CHANNELS") || !strings.Contains(v, "▾  DIRECT MESSAGES") {
+	if !strings.Contains(v, "▾  Channels") || !strings.Contains(v, "▾  Direct messages") {
 		t.Error("built-in section icons missing")
 	}
 	if !strings.Contains(v, unreadsIcon+" Unreads") {
@@ -226,7 +226,7 @@ func TestDMOrderAndExternal(t *testing.T) {
 	m := fakeModel(t, 110, 40)
 	m.client.TeamID = "T1"
 	m.cfg.Sections = nil
-	m.convs["G1"].Latest = "900.0" // a group newer than every DM still comes after them
+	m.convs["G1"].Latest = "900.0" // groups and single DMs mix, newest first
 	m.convs["D2"].Latest = "150.0"
 	m.convs["X1"] = &backend.Conversation{ID: "X1", Name: "partner-shared", Kind: backend.KindChannel, External: true, Latest: "10.0"}
 	m.convs["D9"] = &backend.Conversation{ID: "D9", Kind: backend.KindDM, UserID: "U9X", Latest: "500.0"}
@@ -239,15 +239,15 @@ func TestDMOrderAndExternal(t *testing.T) {
 			dms = append(dms, it.id)
 		}
 	}
-	if strings.Join(dms, ",") != "D1,D2,G1" {
-		t.Errorf("DM order = %v, want singles by recency (D1 200, D2 150) then groups", dms)
+	if strings.Join(dms, ",") != "G1,D1,D2" {
+		t.Errorf("DM order = %v, want by recency (G1 900, D1 200, D2 150)", dms)
 	}
 	for id, want := range map[string]string{"X1": "External", "D9": "External", "C2": "Channels"} {
 		if got := sectionOf(m, id); got != want {
 			t.Errorf("%s is in %q, want %q", id, got, want)
 		}
 	}
-	if v := dump(t, m); !strings.Contains(v, " EXTERNAL") {
+	if v := dump(t, m); !strings.Contains(v, " External") {
 		t.Error("External header missing")
 	}
 }

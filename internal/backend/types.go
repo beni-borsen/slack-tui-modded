@@ -35,6 +35,8 @@ type Conversation struct {
 	InfoLoaded bool
 	// External is a Slack Connect conversation, shared with another organisation.
 	External bool
+	// Members is how many people are in it, once conversations.info told us.
+	Members int
 	// Cached is set while the markers come from the last session's cache.
 	Cached bool `json:"-"`
 }

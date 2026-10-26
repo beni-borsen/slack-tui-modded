@@ -9,6 +9,8 @@ import (
 // State is UI state remembered between runs (not user configuration).
 type State struct {
 	Folded        []string `json:"folded"`         // sidebar sections that are collapsed
+	Unfolded      []string `json:"unfolded"`       // sections collapsed by default (Apps) that are open
+	Muted         []string `json:"muted"`          // conversation IDs muted here (Slack's API can't read or set mutes)
 	SidebarRight  bool     `json:"sidebar_right"`  // sidebar on the right instead of the left
 	SidebarHidden bool     `json:"sidebar_hidden"` // sidebar not shown
 }
