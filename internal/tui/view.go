@@ -248,9 +248,14 @@ func (m *Model) renderInput(w int, isTarget bool, placeholder string) string {
 	if !m.insert || !isTarget {
 		text := sFaint.Render("› " + placeholder)
 		if isTarget {
-			hint := keyHints([][2]string{{"i", "type"}, {"⏎", "send"}, {"alt+⏎", "newline"}})
-			if gap := bw - 4 - lipgloss.Width(text) - lipgloss.Width(hint); gap >= 2 {
-				text += strings.Repeat(" ", gap) + hint
+			// As many hints as fit, the first ones first.
+			hints := [][2]string{{"i", "type"}, {"⏎", "send"}, {"alt+⏎", "newline"}}
+			for n := len(hints); n > 0; n-- {
+				hint := keyHints(hints[:n])
+				if gap := bw - 4 - lipgloss.Width(text) - lipgloss.Width(hint); gap >= 2 {
+					text += strings.Repeat(" ", gap) + hint
+					break
+				}
 			}
 		}
 		return inputBox([]string{text}, bw, sBorder, nil)
@@ -451,13 +456,24 @@ func (m *Model) renderStatus() string {
 			parts = append(parts, sDim.Render(m.status))
 		}
 	}
-	left := strings.Join(parts, "  ")
-	right := keyHints(m.statusHints()) + " "
-	gap := m.width - lipgloss.Width(left) - lipgloss.Width(right)
-	if gap < 1 {
-		return ansi.Truncate(left, m.width, "…")
+	// The key hints keep their place: the left side gives way first, down to
+	// the mode and connection, then hints drop from the end.
+	// A y/n question needs the room more than the keys do.
+	hints := m.statusHints()
+	right := keyHints(hints) + " "
+	if m.confirm != nil {
+		hints, right = nil, ""
 	}
-	return left + strings.Repeat(" ", gap) + right
+	for len(hints) > 1 && lipgloss.Width(mode+"  "+conn)+2+lipgloss.Width(right) > m.width {
+		hints = hints[:len(hints)-1]
+		right = keyHints(hints) + " "
+	}
+	room := m.width - lipgloss.Width(right) - 2
+	if room < lipgloss.Width(mode+"  "+conn) {
+		return ansi.Truncate(strings.Join(parts, "  "), m.width, "…")
+	}
+	left := ansi.Truncate(strings.Join(parts, "  "), room, "…")
+	return left + strings.Repeat(" ", m.width-lipgloss.Width(left)-lipgloss.Width(right)) + right
 }
 
 // paneNames name the focused pane in the status bar; tabNames the pane tab

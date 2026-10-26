@@ -158,7 +158,7 @@ func TestCommandLine(t *testing.T) {
 }
 
 func TestStatusAndPresenceShown(t *testing.T) {
-	m := fakeModel(t, 120, 24)
+	m := fakeModel(t, 160, 24) // wide: the status bar keeps room for the key hints
 	soon := time.Now().Add(time.Hour)
 	m.Update(statusSetMsg{emoji: ":palm_tree:", text: "Vacation"})
 	m.Update(dndMsg{dnd: backend.DND{SnoozeEnd: soon}})

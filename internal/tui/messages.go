@@ -78,7 +78,7 @@ func (m *Model) renderList(l *msgList, width, height int, active, inThread bool)
 			senderKey(*prev) == senderKey(*msg) &&
 			!systemSubtypes[prev.SubType] && !systemSubtypes[msg.SubType] &&
 			msg.Time().Sub(prev.Time()) < 5*time.Minute
-		body := m.messageLines(*msg, width-2, !grouped, inThread)
+		body := m.messageLines(*msg, width-2, !grouped, inThread, active && i == sel)
 
 		// A blank line between one sender's turn and the next.
 		if prev != nil && !grouped {
@@ -134,7 +134,7 @@ func (m *Model) renderList(l *msgList, width, height int, active, inThread bool)
 	// the top row, and the bottom row counts the lines still below.
 	if height >= 4 && len(view) == height {
 		if above := l.top - b.start; above > 0 && end > l.top {
-			view[0] = selRow(m.stickyHead(l.msgs[sel], above+1, width-2))
+			view[0] = selRow(m.stickyHead(l.msgs[sel], above+1, width-2, active))
 		}
 		if below := end - (l.top + height); below > 0 && b.start < l.top+height {
 			view[height-1] = selRow(sFaint.Render(fmt.Sprintf("↓ %d more %s", below+1, plural(below+1, "line", "lines"))))
@@ -149,24 +149,28 @@ func (m *Model) renderList(l *msgList, width, height int, active, inThread bool)
 
 // stickyHead stands in for the header of a message whose top has
 // scrolled out of view: who wrote it, when, and how much is above.
-func (m *Model) stickyHead(msg backend.Message, above, width int) string {
-	head := m.senderLabel(msg) + "  " +
+func (m *Model) stickyHead(msg backend.Message, above, width int, lit bool) string {
+	head := m.senderLabel(msg, lit) + "  " +
 		sTime.Render(msg.Time().Format(m.cfg.TimeFormat)) + "  " +
 		sFaint.Render(fmt.Sprintf("↑ %d more %s", above, plural(above, "line", "lines")))
 	return ansi.Truncate(head, width, "…")
 }
 
 // senderLabel is the coloured name over a message; the user's own read
-// "you", in a muted tone.
-func (m *Model) senderLabel(msg backend.Message) string {
+// "you", in a muted tone, which on the selection's tint (lit) is too faint
+// and takes the text colour instead.
+func (m *Model) senderLabel(msg backend.Message, lit bool) string {
 	if msg.User != "" && msg.User == m.client.SelfID {
+		if lit {
+			return sNormal.Bold(true).Render("you")
+		}
 		return sOwnName.Render("you")
 	}
 	return nameStyle(senderKey(msg)).Render(m.senderName(msg))
 }
 
 // messageLines renders one message, wrapped to width.
-func (m *Model) messageLines(msg backend.Message, width int, header, inThread bool) []string {
+func (m *Model) messageLines(msg backend.Message, width int, header, inThread, lit bool) []string {
 	var lines []string
 	if systemSubtypes[msg.SubType] {
 		text := render.Mrkdwn(msg.Text, m, mdStyles)
@@ -174,7 +178,7 @@ func (m *Model) messageLines(msg backend.Message, width int, header, inThread bo
 		return wrap(sSystem.Render("→ ")+text+"  "+t, width)
 	}
 	if header {
-		name := m.senderLabel(msg)
+		name := m.senderLabel(msg, lit)
 		if msg.User == "" && (msg.BotName != "" || msg.BotID != "") {
 			name += " " + sFaint.Render("APP")
 		}
@@ -195,9 +199,10 @@ func (m *Model) messageLines(msg backend.Message, width int, header, inThread bo
 		text += " " + sWarn.Render(pinIcon+" pinned")
 	}
 	if strings.TrimSpace(msg.Text) != "" || msg.Edited || (msg.Pinned && !header) {
-		// Your own text is a little dimmer, so the replies stand out.
+		// Your own text is a little dimmer, so the replies stand out; selected,
+		// it is full strength like the rest.
 		fg := otherTextOn
-		if msg.User != "" && msg.User == m.client.SelfID {
+		if msg.User != "" && msg.User == m.client.SelfID && !lit {
 			fg = ownTextOn
 		}
 		for _, l := range wrap(text, width) {
