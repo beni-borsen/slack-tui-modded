@@ -36,7 +36,7 @@ var helpKeys = [][2]string{
 	{"r", "mark conversation read"},
 	{"U", "mark unread from the message"},
 	{"z  enter on header", "fold / unfold sidebar section"},
-	{"S", "move the sidebar to the other side"},
+	{"}", "move the sidebar to the other side"},
 	{"]", "hide / show the sidebar"},
 	{"+", "react to the message"},
 	{"c", "copy the message text"},

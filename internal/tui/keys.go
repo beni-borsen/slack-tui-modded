@@ -105,7 +105,7 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 		return m.nextUnread()
 	case "r":
 		return m.markSelectedRead()
-	case "S":
+	case "}":
 		m.sideRight = !m.sideRight
 		return m.saveSideState()
 	case "]":
