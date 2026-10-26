@@ -258,8 +258,16 @@ func wrap(s string, width int) []string {
 var reItem = regexp.MustCompile(`^ *(?:[•◦▪‣-]|\d{1,3}[.)]) +`)
 
 // hang wraps one line; a list item's later lines line up under its text,
-// not under the bullet, as in Slack.
+// not under the bullet, as in Slack. A quote keeps its bar on every row and
+// its text dim, so it stays apart from the reply under it.
 func hang(line string, width int) []string {
+	if qp := mdStyles.Quote.Render("▎") + " "; strings.HasPrefix(line, qp) {
+		rows := linksPerLine(hang(line[len(qp):], max(4, width-2)))
+		for i := range rows {
+			rows[i] = qp + tint(rows[i], quoteOn)
+		}
+		return rows
+	}
 	n := len(reItem.FindString(line)) // the bullet is plain text, so bytes line up
 	pre := line[:n]
 	w := ansi.StringWidth(pre)

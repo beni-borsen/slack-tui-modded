@@ -21,7 +21,7 @@ var (
 	selBgOn  string
 	selBgOff = "\x1b[49m"
 	// Message text colours as raw SGR, laid under the rendered markdown.
-	ownTextOn, otherTextOn string
+	ownTextOn, otherTextOn, quoteOn string
 
 	nameColors []lipgloss.Color
 )
@@ -54,6 +54,7 @@ func ApplyTheme(t config.Theme) {
 	selBgOn = sgr(t.SelectionBg, true)
 	ownTextOn = sgr(t.OwnText, false)
 	otherTextOn = sgr(t.OtherText, false)
+	quoteOn = sgr(t.Dim, false)
 	cOK = c(t.OK)
 	cWarn = c(t.Warn)
 	contrast := c(t.ContrastFg)
