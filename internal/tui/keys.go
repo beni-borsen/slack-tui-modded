@@ -583,6 +583,17 @@ func (m *Model) insertKey(k tea.KeyMsg) tea.Cmd {
 		m.insert = false
 		m.input.Blur()
 		return nil
+	case k.Type == tea.KeyCtrlK:
+		// Jumping elsewhere means we're done typing here: leave insert
+		// mode as esc would (the draft stays) and open the switcher.
+		if m.editing != nil {
+			m.cancelEdit()
+		}
+		m.complete = nil
+		m.insert = false
+		m.input.Blur()
+		m.switcher = m.newSwitcher()
+		return nil
 	case k.Type == tea.KeyEnter && !k.Alt && m.editing != nil:
 		return m.saveEdit()
 	case k.Type == tea.KeyUp && m.editing == nil && m.input.Value() == "":
