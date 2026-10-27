@@ -41,6 +41,8 @@ const (
 	schedIcon   = "\uf017" // clock, for scheduled messages
 	onlineDot   = "●"      // people who are active
 	awayDot     = "○"      // people who are away
+	pillLeft    = "\ue0b6" // rounded ends of sidebar badges
+	pillRight   = "\ue0b4"
 )
 
 const pageSize = 50

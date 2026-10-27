@@ -390,7 +390,7 @@ func (m *Model) sideRow(it sideItem, cursor bool, width int) string {
 		iconStyle = lipgloss.NewStyle().Foreground(cWarn)
 		if n > 0 {
 			base = sUnread
-			badge = sUnreadsBadge.Render(fmt.Sprint(n))
+			badge = pill(sUnreadsBadge, fmt.Sprint(n), active)
 		}
 	} else {
 		c := m.convs[it.id]
@@ -433,9 +433,9 @@ func (m *Model) sideRow(it sideItem, cursor bool, width int) string {
 		}
 		switch {
 		case c.Mentions > 0 && c.IsDM():
-			badge = sBadge.Render(fmt.Sprint(c.Mentions))
+			badge = pill(sBadge, fmt.Sprint(c.Mentions), active)
 		case c.Mentions > 0:
-			badge = sBadge.Render(fmt.Sprintf("@%d", c.Mentions))
+			badge = pill(sBadge, fmt.Sprintf("@%d", c.Mentions), active)
 		case m.needsAttention(c):
 			badge = sNormal.Render("•")
 		}
@@ -480,6 +480,16 @@ func (m *Model) sideRow(it sideItem, cursor bool, width int) string {
 	}
 	pad := max(0, width-1-lipgloss.Width(text)-lipgloss.Width(tail))
 	return marker + text + st(base).Render(strings.Repeat(" ", pad)) + tail
+}
+
+// pill draws a badge with rounded Nerd Font caps in place of its padding,
+// so it keeps the same width. The caps sit on the row's own background.
+func pill(s lipgloss.Style, text string, active bool) string {
+	end := lipgloss.NewStyle().Foreground(s.GetBackground())
+	if active {
+		end = end.Background(cSelBg)
+	}
+	return end.Render(pillLeft) + s.UnsetPadding().Render(text) + end.Render(pillRight)
 }
 
 // groupShort names a group DM for the sidebar: the first two people other
