@@ -15,7 +15,7 @@ import (
 // Palette, set by ApplyTheme.
 var (
 	cFg, cDim, cFaint, cAccent, cUnread, cMention, cSelf lipgloss.Color
-	cCodeBg, cSelBg, cOK, cWarn                          lipgloss.Color
+	cCodeBg, cSelBg, cOK, cWarn, cAlert                  lipgloss.Color
 
 	// cSelBg as raw SGR, for content that sets its own foreground.
 	selBgOn  string
@@ -31,7 +31,7 @@ var (
 	sTitle, sTopic, sBar, sBarDim, sTime, sSystem, sNewLine              lipgloss.Style
 	sThread, sReaction, sReactSelf, sStatusBar, sModeN, sModeI, sOK      lipgloss.Style
 	sWarn, sErr, sBox, sKey, sOwnName, sUnreadsBadge, sPresent, sKeyHint lipgloss.Style
-	sBorder, sBorderFocus, sGroup                                        lipgloss.Style
+	sBorder, sBorderFocus, sGroup, sBorderAlert, sModeAlert, sDuty       lipgloss.Style
 
 	mdStyles render.Styles
 )
@@ -57,6 +57,7 @@ func ApplyTheme(t config.Theme) {
 	quoteOn = sgr(t.Dim, false)
 	cOK = c(t.OK)
 	cWarn = c(t.Warn)
+	cAlert = c(t.Alert)
 	contrast := c(t.ContrastFg)
 
 	nameColors = nameColors[:0]
@@ -79,6 +80,9 @@ func ApplyTheme(t config.Theme) {
 	sBorder = lipgloss.NewStyle().Foreground(cFaint)
 	sBorderFocus = lipgloss.NewStyle().Foreground(cAccent)
 	sGroup = lipgloss.NewStyle().Foreground(cAccent)
+	sBorderAlert = lipgloss.NewStyle().Foreground(cAlert).Bold(true)
+	sModeAlert = lipgloss.NewStyle().Foreground(contrast).Background(cAlert).Bold(true).Padding(0, 1)
+	sDuty = lipgloss.NewStyle().Foreground(cAlert).Bold(true)
 	sTitle = lipgloss.NewStyle().Foreground(cUnread).Bold(true)
 	sTopic = lipgloss.NewStyle().Foreground(cDim)
 	sBar = lipgloss.NewStyle().Foreground(cAccent)

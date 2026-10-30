@@ -72,15 +72,15 @@ func (m *Model) View() string {
 		cw := mainW - tw
 		split = true
 		main = lipgloss.JoinHorizontal(lipgloss.Top,
-			frame(m.renderConvPane(cw-2, ih), cw, h, m.focus == fMessages),
-			frame(m.renderThreadPane(tw-2, ih), tw, h, m.focus == fThread))
+			frame(m.renderConvPane(cw-2, ih), cw, h, m.workBorder(m.focus == fMessages)),
+			frame(m.renderThreadPane(tw-2, ih), tw, h, m.workBorder(m.focus == fThread)))
 	case m.thread != nil:
 		main = m.renderThreadPane(iw, ih)
 	default:
 		main = m.renderConvPane(iw, ih)
 	}
 	if !split {
-		main = frame(main, mainW, h, onMain)
+		main = frame(main, mainW, h, m.workBorder(onMain))
 	}
 
 	var body string
@@ -88,9 +88,9 @@ func (m *Model) View() string {
 	case m.sideHidden:
 		body = main
 	case m.sideRight:
-		body = lipgloss.JoinHorizontal(lipgloss.Top, main, frame(m.renderSidebar(sw-1, ih), sw+1, h, !onMain))
+		body = lipgloss.JoinHorizontal(lipgloss.Top, main, frame(m.renderSidebar(sw-1, ih), sw+1, h, border(!onMain)))
 	default:
-		body = lipgloss.JoinHorizontal(lipgloss.Top, frame(m.renderSidebar(sw-1, ih), sw+1, h, !onMain), main)
+		body = lipgloss.JoinHorizontal(lipgloss.Top, frame(m.renderSidebar(sw-1, ih), sw+1, h, border(!onMain)), main)
 	}
 	if m.cmd != nil {
 		return m.overlayCmdCompletion(body) + "\n" + m.renderCmdLine()
@@ -98,20 +98,39 @@ func (m *Model) View() string {
 	return body + "\n" + m.renderStatus()
 }
 
-// frame draws a rounded border round s, fitted to (w-2)×(h-2): in the
-// accent colour on the focused pane, faint on the others.
-func frame(s string, w, h int, focused bool) string {
-	st := sBorder
+// paneBorder is a frame's look: its colour and line.
+type paneBorder struct {
+	st    lipgloss.Style
+	lines lipgloss.Border
+}
+
+// border is the accent colour on the focused pane, faint on the others.
+func border(focused bool) paneBorder {
 	if focused {
-		st = sBorderFocus
+		return paneBorder{sBorderFocus, lipgloss.RoundedBorder()}
 	}
-	side := st.Render("│")
+	return paneBorder{sBorder, lipgloss.RoundedBorder()}
+}
+
+// workBorder is border for the panes right of the sidebar, thick in the
+// alert colour while a watched channel has news.
+func (m *Model) workBorder(focused bool) paneBorder {
+	if m.alert != nil {
+		return paneBorder{sBorderAlert, lipgloss.ThickBorder()}
+	}
+	return border(focused)
+}
+
+// frame draws a border round s, fitted to (w-2)×(h-2).
+func frame(s string, w, h int, b paneBorder) string {
+	st, ln := b.st, b.lines
+	left, right := st.Render(ln.Left), st.Render(ln.Right)
 	out := make([]string, 0, h)
-	out = append(out, st.Render("╭"+strings.Repeat("─", max(0, w-2))+"╮"))
+	out = append(out, st.Render(ln.TopLeft+strings.Repeat(ln.Top, max(0, w-2))+ln.TopRight))
 	for _, l := range strings.Split(fit(s, w-2, h-2), "\n") {
-		out = append(out, side+l+side)
+		out = append(out, left+l+right)
 	}
-	out = append(out, st.Render("╰"+strings.Repeat("─", max(0, w-2))+"╯"))
+	out = append(out, st.Render(ln.BottomLeft+strings.Repeat(ln.Bottom, max(0, w-2))+ln.BottomRight))
 	return strings.Join(out, "\n")
 }
 
@@ -432,6 +451,9 @@ func (m *Model) renderStatus() string {
 	} else if m.search != nil && m.search.typing {
 		mode = sModeI.Render("SEARCH")
 	}
+	if badge := m.modeBadge(); badge != "" {
+		mode += " " + badge
+	}
 	var conn string
 	switch m.conn {
 	case "connected":
@@ -486,13 +508,10 @@ var (
 // statusHints are the keys for what has focus: the message box, the
 // sidebar, or a selected message; otherwise the general ones.
 func (m *Model) statusHints() [][2]string {
-	overlay := m.switcher != nil || m.picker != nil || m.opener != nil || m.profile != nil ||
-		m.help != nil || (m.search != nil && m.search.open) || m.pins != nil || m.sched != nil ||
-		m.chans != nil || m.members != nil || m.shared != nil
 	switch {
 	case m.insert:
 		return [][2]string{{"esc", "normal"}, {"⏎", "send"}, {"alt+⏎", "newline"}}
-	case overlay:
+	case m.switcher != nil || m.overlayOpen():
 	case m.focus == fSidebar:
 		return [][2]string{{"⏎", "open"}, {"r", "mark read"}, {"M", "mute"}, {"tab", tabNames[m.nextFocus()]}, {"?", "help"}}
 	case m.focus == fThread && m.thread != nil && len(m.thread.list.msgs) > 0:
@@ -501,6 +520,13 @@ func (m *Model) statusHints() [][2]string {
 		return [][2]string{{"t", "reply"}, {"+", "react"}, {"c", "copy"}, {"tab", tabNames[m.nextFocus()]}, {"?", "help"}}
 	}
 	return [][2]string{{"ctrl+k", "jump"}, {"/", "search"}, {":", "command"}, {"?", "help"}}
+}
+
+// overlayOpen is whether a pane covers the conversation.
+func (m *Model) overlayOpen() bool {
+	return m.picker != nil || m.opener != nil || m.profile != nil ||
+		m.help != nil || (m.search != nil && m.search.open) || m.pins != nil || m.sched != nil ||
+		m.chans != nil || m.members != nil || m.shared != nil
 }
 
 // nextFocus is the pane tab moves to.

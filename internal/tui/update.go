@@ -530,7 +530,13 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmd, m.waitEvent())
 
 	case backend.EvMessage:
-		return m, tea.Batch(m.onMessage(msg), m.waitEvent())
+		// onMessage first: it counts the message unread before onWatched
+		// may open the channel.
+		cmd := m.onMessage(msg)
+		return m, tea.Batch(cmd, m.onWatched(msg), m.waitEvent())
+
+	case modeTick:
+		return m, m.onModeTick(msg)
 
 	case backend.EvMessageChanged:
 		m.editMessage(msg.Channel, msg.Msg)

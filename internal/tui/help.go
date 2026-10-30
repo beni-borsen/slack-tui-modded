@@ -33,6 +33,7 @@ var helpKeys = [][2]string{
 	{"n N", "next / previous search result, without the list"},
 	{":", "command line (below); tab completes, ↑ ↓ history"},
 	{"u", "next unread conversation"},
+	{"!", "go to the watched channel with news (while a :mode is on)"},
 	{"r", "mark conversation read"},
 	{"U", "mark unread from the message"},
 	{"z  enter on header", "fold / unfold sidebar section"},
@@ -78,6 +79,9 @@ func (m *Model) openHelp() tea.Cmd {
 	}
 	for _, c := range commands {
 		h.entries = append(h.entries, helpEntry{key: ":" + c.name, desc: c.help, args: c.args, command: true})
+	}
+	for _, md := range m.cfg.Modes {
+		h.entries = append(h.entries, helpEntry{key: ":" + md.Name, desc: m.modeHelp(md), command: true})
 	}
 	m.help = h
 	h.filter()

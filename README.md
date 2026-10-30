@@ -82,6 +82,19 @@ name = "home"
 emoji = ":house:"
 text = "Working from home"
 expires = "until tomorrow"
+
+# Modes: a duty turned on and off with `:<name>`. It lasts until `until` the next day
+# (midnight when left out), across restarts. While it is on, a new top-level message in a
+# watched channel draws the panes right of the sidebar with a thick border in the theme's
+# `alert` colour and opens the channel; while you are in insert mode (or a pane or the command
+# line is open) it waits, and `!` goes there. The alert ends at the first key pressed while
+# the channel is shown.
+[[mode]]
+name = "first-responder"
+emoji = ":rotating_light:"   # status while on, ending with the mode; leave both out to keep yours
+text = "First responder"
+watch = ["#uptime-robot"]
+until = "08:00"
 ```
 
 ### Theme
@@ -113,6 +126,7 @@ own_name         = "245"  # "you" on your own messages
 own_text         = "250"  # the text of your own messages
 other_text       = "253"  # the text of everyone else's messages
 unreads_badge    = "209"  # the total on the Unreads row
+alert            = "203"  # panes and pill on news in a mode's watched channel (default: mention)
 names = ["75", "114", "176", "215", "80", "211", "150", "179", "141", "109"]  # sender names
 ```
 
@@ -139,6 +153,7 @@ names = ["75", "114", "176", "215", "80", "211", "150", "179", "141", "109"]  # 
 | `n` / `N` | after a search: go to the next / previous result without opening the list (the next page is fetched when needed) |
 | `:` | command line (below): `tab` completes, `↑` `↓` history, `esc` leaves |
 | `u` | next unread conversation |
+| `!` | while a mode is on: the watched channel with news, else the first watched channel |
 | `r` | mark conversation read |
 | `M` (sidebar) | mute / unmute the conversation: it moves into the `+ N muted` row at the end of its section (`enter` there lists them) and stops counting as unread unless it mentions you. Slack's API can't read or set mutes, so these are this client's own |
 | `U` | mark unread from the selected message: the read marker moves to just before it, in Slack too, until you read to the bottom or open it again (not for thread replies: the API can't) |
@@ -174,6 +189,8 @@ names = ["75", "114", "176", "215", "80", "211", "150", "179", "141", "109"]  # 
 | `:members` | who is in this conversation, filtered as you type; `enter` shows a profile |
 | `:profile [@person]` | a person's profile (alone: the person of the open DM) |
 | `:bookmark link [title]` | add a link to the conversation's bookmarks (`https://` is added when left out; no title means the link is the title) |
+| `:<mode>` / `:mode <name>` | turn a `[[mode]]` on, or off when it is on (one at a time); turning it off clears the status it set |
+| `:mode` / `:mode off` | show the mode that is on (or list them) / turn it off |
 | `:away` / `:back` | show as away / let Slack decide again |
 
 A unique prefix is enough (`:st`, `:d 1h`). Your DND, away state and status sit in the status bar.

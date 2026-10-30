@@ -47,6 +47,8 @@ var commands = []command{
 		func(m *Model, a string) tea.Cmd { return m.cmdCreate(a) }},
 	{"invite", "@person [@person…]", "add people to this channel",
 		func(m *Model, a string) tea.Cmd { return m.cmdInvite(a) }},
+	{"mode", "[name | off]", "turn a [[mode]] on or off (:<name> too); alone shows it",
+		func(m *Model, a string) tea.Cmd { return m.cmdMode(a) }},
 	{"away", "", "show as away",
 		func(m *Model, _ string) tea.Cmd { return m.cmdAway(true) }},
 	{"back", "", "show as active again (Slack decides)",
@@ -98,6 +100,9 @@ func (m *Model) runCmd(line string) tea.Cmd {
 		m.cmdHist = append(m.cmdHist, line)
 	}
 	name, args, _ := strings.Cut(line, " ")
+	if md, ok := m.modeConfig(name); ok {
+		return m.toggleMode(md)
+	}
 	c, ok := findCommand(name)
 	if !ok {
 		return m.setStatus("unknown command :"+name+" (? lists them)", true)
@@ -183,6 +188,11 @@ func (m *Model) updateCmdCompletion() tea.Cmd {
 		for _, cmd := range commands {
 			if strings.HasPrefix(cmd.name, strings.ToLower(text)) && cmd.name != text {
 				items = append(items, compItem{insert: cmd.name, label: cmd.name, detail: strings.TrimSpace(cmd.args + "  " + cmd.help)})
+			}
+		}
+		for _, md := range m.cfg.Modes {
+			if strings.HasPrefix(strings.ToLower(md.Name), strings.ToLower(text)) && md.Name != text {
+				items = append(items, compItem{insert: md.Name, label: md.Name, detail: m.modeHelp(md)})
 			}
 		}
 		if len(items) > 0 {

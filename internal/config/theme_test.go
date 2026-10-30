@@ -53,3 +53,15 @@ func TestLoadThemeBad(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadThemeAlertFollowsMention(t *testing.T) {
+	writeTheme(t, "mention = \"#f38ba8\"\n")
+	th, err := LoadTheme()
+	if err != nil || th.Alert != "#f38ba8" {
+		t.Fatalf("alert = %q, %v; want the theme's mention colour", th.Alert, err)
+	}
+	writeTheme(t, "mention = \"#f38ba8\"\nalert = \"196\"\n")
+	if th, _ := LoadTheme(); th.Alert != "196" {
+		t.Fatalf("alert = %q, want 196", th.Alert)
+	}
+}

@@ -129,6 +129,9 @@ type Model struct {
 	help     *helpState    // `?`, while open
 	profile  *profileState // `I`: a person's profile card, while open
 	members  *membersState // `:members`, while open
+	mode     *modeState    // the [[mode]] that is on
+	modeSeq  int           // bumped when it changes, to drop stale ticks
+	alert    *alertState   // new message in a watched channel, not yet seen
 
 	booted      bool
 	fromCache   bool // drawn from the cache; the API hasn't answered yet
@@ -304,7 +307,7 @@ func (m *Model) Init() tea.Cmd {
 	if m.sideHidden {
 		m.focus = fMessages
 	}
-	return tea.Batch(m.loadCache(), m.boot(), m.loadEmoji(), m.waitEvent(), m.flushLater(), textarea.Blink)
+	return tea.Batch(m.restoreMode(st), m.loadCache(), m.boot(), m.loadEmoji(), m.waitEvent(), m.flushLater(), textarea.Blink)
 }
 
 func (m *Model) waitEvent() tea.Cmd {

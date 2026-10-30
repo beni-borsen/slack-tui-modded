@@ -33,9 +33,27 @@ type StatusTemplate struct {
 	Expires string `toml:"expires"`
 }
 
+// Mode is a duty turned on with `:<name>` (or `:mode <name>`), such as
+// being the day's first responder. It lasts until Until the next day, or
+// until turned off.
+type Mode struct {
+	Name string `toml:"name"`
+	// Emoji and Text are the status set while the mode is on; both empty
+	// leaves the status alone.
+	Emoji string `toml:"emoji"`
+	Text  string `toml:"text"`
+	// Watch are "#channel"s whose new messages turn the panes red and, when
+	// nothing is being typed, are opened.
+	Watch []string `toml:"watch"`
+	// Until is the time of day ("08:00") the mode ends the next day; empty
+	// means midnight.
+	Until string `toml:"until"`
+}
+
 type Config struct {
 	Sections []Section        `toml:"section"`
 	Statuses []StatusTemplate `toml:"status"`
+	Modes    []Mode           `toml:"mode"`
 	// TimeFormat is a Go time layout for message timestamps.
 	TimeFormat string `toml:"time_format"`
 	// SidebarWidth is the width of the left column in cells.

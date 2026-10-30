@@ -15,6 +15,7 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 	if k.String() == "ctrl+c" {
 		return m.quit()
 	}
+	m.seeAlert()
 	if m.viewer != nil {
 		return m.viewerKey(k)
 	}
@@ -103,6 +104,8 @@ func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
 		return m.startInsert()
 	case "u":
 		return m.nextUnread()
+	case "!":
+		return m.jumpAlert()
 	case "r":
 		return m.markSelectedRead()
 	case "}":

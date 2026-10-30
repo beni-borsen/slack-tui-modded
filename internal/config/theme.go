@@ -38,11 +38,20 @@ type Theme struct {
 	OwnText        string `toml:"own_text"`         // the text of your own messages
 	OtherText      string `toml:"other_text"`       // the text of everyone else's messages
 	UnreadsBadge   string `toml:"unreads_badge"`    // the total on the Unreads row
+	Alert          string `toml:"alert"`            // panes and pill on a new message in a watched channel (default: mention)
 	// Names are the colors sender names are picked from.
 	Names []string `toml:"names"`
 }
 
 func DefaultTheme() Theme {
+	t := baseTheme()
+	t.Alert = t.Mention
+	return t
+}
+
+// baseTheme is the default with Alert left empty, so a theme that sets
+// mention but not alert gets its own mention colour for alerts.
+func baseTheme() Theme {
 	return Theme{
 		Fg:             "252",
 		Dim:            "244",
@@ -84,13 +93,16 @@ func validColor(s string) bool {
 
 // LoadTheme reads the theme file. A missing file gives the default theme.
 func LoadTheme() (Theme, error) {
-	t := DefaultTheme()
+	t := baseTheme()
 	md, err := toml.DecodeFile(ThemePath(), &t)
 	if errors.Is(err, fs.ErrNotExist) {
-		return t, nil
+		return DefaultTheme(), nil
 	}
 	if err != nil {
 		return DefaultTheme(), err
+	}
+	if t.Alert == "" {
+		t.Alert = t.Mention
 	}
 	if keys := md.Undecoded(); len(keys) > 0 {
 		return DefaultTheme(), fmt.Errorf("unknown key %q", keys[0].String())

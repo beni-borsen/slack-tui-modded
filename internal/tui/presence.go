@@ -50,6 +50,7 @@ type statusSetMsg struct {
 	emoji, text string
 	expires     time.Time
 	err         error
+	note        string // said instead of "status set" (a mode set it)
 }
 
 type awayMsg struct {
@@ -455,9 +456,13 @@ func (m *Model) templateItems(text string) []compItem {
 }
 
 func (m *Model) sendStatus(emoji, text string, expires time.Time) tea.Cmd {
+	return m.sendStatusNote(emoji, text, expires, "")
+}
+
+func (m *Model) sendStatusNote(emoji, text string, expires time.Time, note string) tea.Cmd {
 	return func() tea.Msg {
 		err := m.client.SetStatus(m.ctx, emoji, text, expires)
-		return statusSetMsg{emoji: emoji, text: text, expires: expires, err: err}
+		return statusSetMsg{emoji: emoji, text: text, expires: expires, err: err, note: note}
 	}
 }
 
@@ -472,6 +477,9 @@ func (m *Model) statusSet(msg statusSetMsg) tea.Cmd {
 		me.StatusExpires = msg.expires.Unix()
 	}
 	m.users[me.ID] = me
+	if msg.note != "" {
+		return m.setStatus(msg.note, false)
+	}
 	if msg.emoji == "" && msg.text == "" {
 		return m.setStatus("status cleared", false)
 	}
