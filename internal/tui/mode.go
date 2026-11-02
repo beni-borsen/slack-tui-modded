@@ -92,9 +92,14 @@ func (m *Model) toggleMode(md config.Mode) tea.Cmd {
 	if err != nil {
 		return m.setStatus("mode "+md.Name+": "+err.Error(), true)
 	}
+	// The old mode's status is cleared before the new one is set; the rest
+	// runs at once (a tea.Sequence would wait out every tick in it).
 	var cmds []tea.Cmd
+	var clearOld tea.Cmd
 	if m.mode != nil {
-		cmds = append(cmds, m.endMode(true))
+		var ui tea.Cmd
+		ui, clearOld = m.stopMode(true)
+		cmds = append(cmds, ui)
 	}
 	m.mode = &modeState{cfg: md, until: until}
 	m.modeSeq++
@@ -109,27 +114,35 @@ func (m *Model) toggleMode(md config.Mode) tea.Cmd {
 		note += "; not in " + strings.Join(missing, ", ")
 	}
 	cmds = append(cmds, m.saveMode(), m.modeLater(), m.setStatus(note, len(missing) > 0))
+	var setNew tea.Cmd
 	if emoji, text := modeStatus(md); emoji != "" || text != "" {
-		cmds = append(cmds, m.sendStatusNote(emoji, text, until, note))
+		setNew = m.sendStatusNote(emoji, text, until, note)
 	}
-	return tea.Sequence(cmds...)
+	return tea.Batch(append(cmds, tea.Sequence(clearOld, setNew))...)
 }
 
 // endMode turns the mode off; clearStatus also clears the status it set,
 // unless it has been changed since.
 func (m *Model) endMode(clearStatus bool) tea.Cmd {
+	ui, status := m.stopMode(clearStatus)
+	return tea.Batch(ui, status)
+}
+
+// stopMode is endMode with the status clearing apart, for toggleMode to
+// order before the next mode's status.
+func (m *Model) stopMode(clearStatus bool) (ui, status tea.Cmd) {
 	md := m.mode
 	m.mode, m.alert = nil, nil
 	m.modeSeq++
 	note := md.cfg.Name + " off"
-	cmds := []tea.Cmd{m.saveMode(), m.setStatus(note, false)}
+	ui = tea.Batch(m.saveMode(), m.setStatus(note, false))
 	if emoji, text := modeStatus(md.cfg); clearStatus && (emoji != "" || text != "") {
 		me := m.users[m.client.SelfID]
 		if me.StatusEmoji == emoji && me.StatusText == text {
-			cmds = append(cmds, m.sendStatusNote("", "", time.Time{}, note))
+			status = m.sendStatusNote("", "", time.Time{}, note)
 		}
 	}
-	return tea.Sequence(cmds...)
+	return ui, status
 }
 
 // modeStatus is the status a mode sets, the emoji in its :colon: form.
